@@ -1,0 +1,46 @@
+"use client";
+
+import * as React from "react";
+import { Plus } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useT } from "@/components/providers/locale-provider";
+import { UsersTable } from "./users-table";
+import { RolePermissions } from "./role-permissions";
+import type { UsersPage } from "@/features/users/types";
+
+/** Users & Access hub: the user list (A4.0/A4.1) and the role matrix (A4.2). */
+export function UsersAccessTabs({ page }: { page: UsersPage }) {
+  const t = useT();
+  const [tab, setTab] = React.useState("list");
+  // The "Add user" action lives here, outside the table Card, so it sits with
+  // the page-level actions like every other screen. It triggers the table's
+  // create dialog through this ref.
+  const openCreateRef = React.useRef<(() => void) | null>(null);
+
+  return (
+    <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col gap-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <TabsList>
+          <TabsTrigger value="list">{t("users.tab.list")}</TabsTrigger>
+          <TabsTrigger value="roles">{t("users.tab.roles")}</TabsTrigger>
+        </TabsList>
+        {tab === "list" ? (
+          <Button size="sm" onClick={() => openCreateRef.current?.()}>
+            <Plus className="size-4" />
+            {t("users.addUser")}
+          </Button>
+        ) : null}
+      </div>
+
+      <TabsContent value="list" className="flex min-h-0 flex-1 flex-col">
+        <UsersTable page={page} openCreateRef={openCreateRef} />
+      </TabsContent>
+
+      <TabsContent value="roles">
+        <RolePermissions />
+      </TabsContent>
+    </Tabs>
+  );
+}

@@ -1,0 +1,2 @@
+# Go sources use LF; gofmt requires it.
+*.go text eol=lf

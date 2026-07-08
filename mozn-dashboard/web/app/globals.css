@@ -1,0 +1,659 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "leaflet/dist/leaflet.css";
+
+/* Class-based dark mode (toggled via next-themes adding `.dark` to <html>). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Design foundations from Figma "Mozn | Early Warning System". Single source of
+ * truth: components reference these tokens, never raw hex. Colors live in
+ * :root/.dark and are aliased in @theme inline; type/radius/shadow in @theme
+ * inline; the spacing base in @theme. "CODE EXTENSION" marks tokens with no
+ * Figma source. */
+:root {
+  --radius: 0.625rem;
+
+  /* Surfaces & text */
+  --background: #f7f7f8;
+  --foreground: #1f1e24;
+  --card: #ffffff;
+  --card-foreground: #1f1e24;
+  --popover: #ffffff;
+  --popover-foreground: #1f1e24;
+  /* Modal scrim — Figma color/bg/overlay (#1F1E24 @ 70%). */
+  --overlay: rgb(31 30 36 / 0.7);
+
+  /* Brand */
+  --primary: #032460;
+  --primary-foreground: #ffffff;
+  --brand-subtle: #e6ebf2;
+  /* Figma color/text/brand — split from --primary so dark can lighten it. */
+  --brand-foreground: #032460;
+
+  /* Logo colourway (Figma treatments board): navy wordmark + orange accent. */
+  --logo-ink: #001f54;
+  --logo-accent: #ff7e50;
+
+  /* Neutral roles */
+  --secondary: #f7f7f8;
+  --secondary-foreground: #1f1e24;
+  /* Figma color/bg/tertiary (Neutral/100). */
+  --muted: #ededf0;
+  /* Figma color/text/muted. */
+  --muted-foreground: #6e6e78;
+  --accent: #e6ebf2;
+  --accent-foreground: #032460;
+
+  /* Feedback */
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+
+  /* Interactive states — Figma color/interactive/*. Available for adoption; the
+   * app currently derives these via opacity (e.g. hover:bg-primary/90). */
+  --interactive-default: #032460;
+  --interactive-hover: #021d4d;
+  --interactive-active: #02163a;
+  --interactive-secondary: #3b99dd;
+  --interactive-secondary-hover: #2f7ab1;
+  --interactive-disabled-bg: #ededf0;
+  --interactive-disabled-text: #b0b0b8;
+
+  /* Lines & focus — Figma color/border ramp (Neutral 200/100/300). */
+  --border: #d4d4d9; /* border/default — Neutral/200 */
+  --border-subtle: #ededf0; /* border/subtle — Neutral/100 */
+  --border-strong: #b0b0b8; /* border/strong — Neutral/300 */
+  --input: #d4d4d9;
+  --ring: #3b99dd;
+
+  /* Status palette. --status-advisory is a CODE EXTENSION — no Figma source. */
+  --status-normal: #10b981;
+  --status-warning: #ef4444;
+  --status-advisory: #f59e0b;
+  --status-offline: #9ca3af;
+
+  /* Alert-severity palette — matches the public app's map-pin severity tiers
+     (yellow/orange/red). Theme-invariant: same hue on light and dark. */
+  --severity-yellow: #eab308;
+  --severity-orange: #f97316;
+  --severity-red: #dc2626;
+
+  /* Text accents. --text-warning is a CODE EXTENSION — no Figma warning-text token. */
+  --text-secondary: #54545c;
+  --text-link: #3b99dd;
+  --text-warning: #dc2626;
+
+  /* Chart palette. --chart-4 is a CODE EXTENSION — no Figma source. */
+  --chart-1: #3b99dd;
+  --chart-2: #10b981;
+  --chart-3: #1a478c;
+  --chart-4: #f59e0b;
+  --chart-track: #ededf0;
+
+  /* Elevation — Figma effect "shadow/card" (two-layer key + ambient). */
+  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.05), 0 2px 6px -1px rgb(0 0 0 / 0.04);
+}
+
+/* Dark mode — Figma "Semantic" (Dark). Only raw tokens flip; components reskin
+ * automatically via the semantic aliases. */
+.dark {
+  --background: #121115;
+  --foreground: #f7f7f8;
+  --card: #1f1e24;
+  --card-foreground: #f7f7f8;
+  --popover: #1f1e24;
+  --popover-foreground: #f7f7f8;
+  /* Figma color/bg/overlay (Dark): pure black @ 70%. */
+  --overlay: rgb(0 0 0 / 0.7);
+
+  --primary: #1a478c;
+  --primary-foreground: #ffffff;
+  /* Figma color/bg/brand-subtle (Dark), exact. NB: darker than --card. */
+  --brand-subtle: #010814;
+  /* Figma color/text/brand (Dark), exact. */
+  --brand-foreground: #8099bf;
+
+  /* Reversed on dark: white wordmark, same orange accent. */
+  --logo-ink: #ffffff;
+  --logo-accent: #ff7e50;
+
+  --secondary: #2a2932;
+  --secondary-foreground: #f7f7f8;
+  --muted: #26252b;
+  /* Figma color/text/muted (Dark), exact. */
+  --muted-foreground: #8c8c96;
+  --accent: #2a2932;
+  --accent-foreground: #f7f7f8;
+
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+
+  /* Figma color/interactive/* (Dark) — Primary/Secondary shifted lighter. */
+  --interactive-default: #4d70a6;
+  --interactive-hover: #8099bf;
+  --interactive-active: #b3c2d9;
+  --interactive-secondary: #5eace3;
+  --interactive-secondary-hover: #81bee9;
+  --interactive-disabled-bg: #1f1e24;
+  --interactive-disabled-text: #54545c;
+
+  /* Figma color/border dark ramp (Neutral 700/800/600). */
+  --border: #3a3a42; /* border/default — Neutral/700 */
+  /* Figma color/border/subtle (Dark), exact. NB: equals --card. */
+  --border-subtle: #1f1e24; /* border/subtle — Neutral/800 */
+  --border-strong: #54545c; /* border/strong — Neutral/600 */
+  --input: #45454f;
+  --ring: #5eace3;
+
+  --status-normal: #10b981;
+  --status-warning: #ef4444;
+  --status-advisory: #f59e0b;
+  --status-offline: #9ca3af;
+
+  /* Alert-severity palette stays constant across themes (see :root). */
+  --severity-yellow: #eab308;
+  --severity-orange: #f97316;
+  --severity-red: #dc2626;
+
+  --text-secondary: #b0b0b8;
+  --text-link: #81bee9;
+  --text-warning: #fca5a5;
+
+  --chart-1: #5eace3;
+  --chart-2: #10b981;
+  --chart-3: #4d70a6;
+  --chart-4: #f59e0b;
+  --chart-track: #3a3a42;
+
+  /* shadow/card geometry as light, opacity lifted for the dark canvas. */
+  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.5), 0 2px 6px -1px rgb(0 0 0 / 0.4);
+}
+
+@theme inline {
+  /* Latin (English/LTR) renders Poppins; any Arabic glyph — absent from Poppins
+   * — falls through per-glyph to Almarai, so Arabic never reaches a system font.
+   * --font-arabic targets the Almarai face explicitly for the RTL path below.
+   *
+   * NOTE: next/font expands each family to `"<Font>", "<Font> Fallback"`, where
+   * the Fallback is a metric-matched `local(Arial)` with NO unicode-range. Left
+   * as `var(--font-poppins), var(--font-almarai)` the stack becomes
+   * `Poppins, Poppins Fallback(Arial), Almarai, …` — and since Arial covers
+   * Arabic, "Poppins Fallback" steals every Arabic glyph before Almarai is
+   * reached (Arabic renders as Arial, not Almarai). So we list the REAL faces
+   * first and the Arial metric-fallbacks after: Latin→Poppins, Arabic→Almarai
+   * per-glyph, with the fallbacks covering only the font-load swap window. The
+   * "* Fallback" names are next/font's stable convention (see layout.tsx). */
+  --font-sans: "Poppins", "Almarai", "Poppins Fallback", "Almarai Fallback", ui-sans-serif, system-ui, sans-serif;
+  --font-arabic: var(--font-almarai), sans-serif;
+
+  /* Type scale — Figma "Typography". Tailwind aliases map 1:1 to Figma tiers:
+   * xxs Body/xxs 10/16 · xs 12/18 · sm 14/21 · base Body/md 16/24 ·
+   * lg Heading/sm 18/27 · xl Heading/md 20/30 · 2xl Heading/xl 28/36. */
+  --text-xxs: 0.625rem;
+  --text-xxs--line-height: 1rem;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.125rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.3125rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.6875rem;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.875rem;
+  --text-2xl: 1.75rem;
+  --text-2xl--line-height: 2.25rem;
+
+  /* Extended Figma tiers — Heading/lg, the Display ramp, and Label sizes
+   * (Auto line-height). Available for use; unused utilities emit no CSS. */
+  --text-heading-lg: 1.5rem; /* 24 */
+  --text-heading-lg--line-height: 2rem; /* 32 */
+  --text-display-sm: 2.125rem; /* 34 */
+  --text-display-sm--line-height: 3rem; /* 48 */
+  --text-display-md: 2.375rem; /* 38 */
+  --text-display-md--line-height: 3rem; /* 48 */
+  --text-display-lg: 3rem; /* 48 */
+  --text-display-lg--line-height: 4.25rem; /* 68 */
+  --text-display-xl: 3.875rem; /* 62 */
+  --text-display-xl--line-height: 4.25rem; /* 68 */
+  --text-label-lg: 0.875rem; /* 14 · Auto */
+  --text-label-md: 0.75rem; /* 12 · Auto */
+  --text-label-sm: 0.625rem; /* 10 · Auto */
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-overlay: var(--overlay);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-brand-subtle: var(--brand-subtle);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-logo-ink: var(--logo-ink);
+  --color-logo-accent: var(--logo-accent);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-interactive-default: var(--interactive-default);
+  --color-interactive-hover: var(--interactive-hover);
+  --color-interactive-active: var(--interactive-active);
+  --color-interactive-secondary: var(--interactive-secondary);
+  --color-interactive-secondary-hover: var(--interactive-secondary-hover);
+  --color-interactive-disabled-bg: var(--interactive-disabled-bg);
+  --color-interactive-disabled-text: var(--interactive-disabled-text);
+
+  --color-status-normal: var(--status-normal);
+  --color-status-warning: var(--status-warning);
+  --color-status-advisory: var(--status-advisory);
+  --color-status-offline: var(--status-offline);
+
+  --color-severity-yellow: var(--severity-yellow);
+  --color-severity-orange: var(--severity-orange);
+  --color-severity-red: var(--severity-red);
+
+  --color-text-secondary: var(--text-secondary);
+  --color-text-link: var(--text-link);
+  --color-text-warning: var(--text-warning);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-track: var(--chart-track);
+
+  /* Border radius — Figma "Space & Numbers" (none/full are Tailwind built-ins). */
+  --radius-sm: 0.125rem; /* 2px */
+  --radius-md: 0.25rem; /* 4px */
+  --radius-lg: 0.5rem; /* 8px */
+  --radius-xl: 0.75rem; /* 12px */
+  --radius-2xl: 1rem; /* 16px */
+  --radius-3xl: 1.5rem; /* 24px */
+
+  /* Alias the raw var so the .dark override cascades to the shadow-card utility. */
+  --shadow-card: var(--shadow-card);
+}
+
+/* Spacing & sizing — Figma "Space & Numbers", a 4px base. --spacing is
+ * Tailwind's multiplier (p-2 = 8px, size-4 = 16px); declared non-inline so :root
+ * still exposes it for the --spacing() function (calendar, toggle-group). Equals
+ * Tailwind's default — an explicit, Figma-traceable base, no value change. */
+@theme {
+  --spacing: 0.25rem; /* Figma "Space & Numbers" base unit — 4px */
+}
+
+/* Grid & Layout (Figma "Grid & Layout") is reference-only: the app keeps
+ * Tailwind's breakpoints, so Figma's device widths are not tokenised (that would
+ * rewrite every responsive boundary). */
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  /* Firefox fallback (no ::-webkit-scrollbar). Not applied on Chromium, which
+   * would then ignore the ::-webkit-scrollbar pill styling below. */
+  @supports not selector(::-webkit-scrollbar) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--border-strong) transparent;
+    }
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+  /* Tailwind v4 drops Preflight's button pointer cursor; restore it (disabled
+   * controls keep the default arrow). */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"],
+  [role="menuitem"] {
+    cursor: pointer;
+  }
+
+  /* Theme-aware WebKit scrollbars — thin pill thumb on a transparent track. */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  /* Drop the classic up/down arrow buttons so the bar is a clean pill. */
+  ::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+  ::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    background-color: var(--border-strong);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--muted-foreground);
+  }
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
+/* Arabic (RTL) resolves to Almarai explicitly via --font-arabic. English (LTR)
+ * keeps Poppins from `font-sans` on <body>. The tuned control faces below
+ * ("Almarai Form"/"Almarai Pill") outrank this and keep their Latin/digits on
+ * --font-sans (Poppins). Unlayered so it beats the layered `font-sans` utility. */
+[dir="rtl"] body {
+  font-family: var(--font-arabic);
+}
+
+/* Arabic is cursive — letter-spacing breaks glyph joining, so neutralize
+ * tracking-* in RTL. Unlayered so it beats the layered Tailwind utilities. */
+[dir="rtl"] * {
+  letter-spacing: normal !important;
+}
+
+/* Almarai has a smaller x-height than the Latin face, so small tiers read tiny
+ * in Arabic. Bump them up one Figma step in RTL only (LTR unchanged). Unlayered
+ * so it wins over the Tailwind size utilities. */
+[dir="rtl"] .text-\[10px\],
+[dir="rtl"] .text-xxs {
+  font-size: 0.75rem; /* 12px — Body/xs */
+  line-height: 1.125rem; /* 18px */
+}
+
+[dir="rtl"] .text-xs {
+  font-size: 0.875rem; /* 14px — Body/sm */
+  line-height: 1.3125rem; /* 21px */
+}
+
+[dir="rtl"] .text-sm {
+  font-size: 1rem; /* 16px — Body/md */
+  line-height: 1.5rem; /* 24px */
+}
+
+/* Fixed-height controls (Input, SelectTrigger) clip Almarai's Arabic descenders:
+ * its typo descent (~21% em) is far shallower than its real ink (~40% em). This
+ * self-hosted family corrects the vertical metrics (descent 45% / ascent 90%)
+ * and is used for RTL controls only; Latin/digits fall through to --font-sans. */
+@font-face {
+  font-family: "Almarai Form";
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url("/fonts/almarai-arabic-300-normal.woff2") format("woff2");
+  ascent-override: 90%;
+  descent-override: 45%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Almarai Form";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/almarai-arabic-400-normal.woff2") format("woff2");
+  ascent-override: 90%;
+  descent-override: 45%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Almarai Form";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/almarai-arabic-700-normal.woff2") format("woff2");
+  ascent-override: 90%;
+  descent-override: 45%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Almarai Form";
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url("/fonts/almarai-arabic-800-normal.woff2") format("woff2");
+  ascent-override: 90%;
+  descent-override: 45%;
+  line-gap-override: 0%;
+}
+
+[dir="rtl"] [data-slot="input"],
+[dir="rtl"] [data-slot="select-trigger"] {
+  font-family: "Almarai Form", var(--font-sans);
+  line-height: 2rem; /* 32px */
+}
+
+/* LTR-locked inputs in an RTL page (e.g. the phone field) hold only Latin/digits
+ * and never clip, so the Almarai-tuned descent pushes them up. Revert to the
+ * Latin metrics; the extra [dir="ltr"] outweighs the rule above. */
+[dir="rtl"] [data-slot="input"][dir="ltr"] {
+  font-family: var(--font-sans);
+  line-height: normal;
+}
+
+/* Badges/chips mis-center Arabic glyphs: Almarai's declared ascent (90%) sits
+ * well above the visible letter tops (~72%). A second self-hosted family with
+ * ink-tuned overrides (ascent 72% / descent 22%) centres the visible glyphs.
+ * Badges have no overflow-clip, so the tight box never cuts. */
+@font-face {
+  font-family: "Almarai Pill";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/almarai-arabic-400-normal.woff2") format("woff2");
+  ascent-override: 72%;
+  descent-override: 22%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Almarai Pill";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/almarai-arabic-700-normal.woff2") format("woff2");
+  ascent-override: 72%;
+  descent-override: 22%;
+  line-gap-override: 0%;
+}
+
+[dir="rtl"] [data-slot="badge"] {
+  font-family: "Almarai Pill", var(--font-sans);
+  line-height: 1;
+  min-height: 1.5rem; /* 24px — match the LTR badge box */
+}
+
+/* Pill/chip spans outside the Badge component (SLA/status chips, impact tags,
+ * notification counts) hit the same Arabic mis-centering — opt in via
+ * data-slot="pill" (no min-height). Map labels get it by class. */
+[dir="rtl"] [data-slot="pill"],
+[dir="rtl"] .mz-pin-label {
+  font-family: "Almarai Pill", var(--font-sans);
+  line-height: 1;
+}
+
+/* Station Health Map (Leaflet + CARTO tiles). Theme-aware container with a
+ * smooth basemap/path transition on theme flip; pins are divIcons styled here
+ * so colour/pulse live in CSS. */
+
+.leaflet-container {
+  background: var(--secondary);
+  font-family: var(--font-sans);
+  outline: none;
+}
+.leaflet-container a {
+  color: inherit;
+}
+
+.leaflet-tile {
+  transition: filter 200ms ease;
+}
+.leaflet-overlay-pane path {
+  transition:
+    fill 200ms ease,
+    stroke 200ms ease,
+    fill-opacity 200ms ease;
+}
+
+/* Station pin — a fixed 28px halo + 12px dot at every zoom. These custom
+ * properties inherit down to every .mz-pin* element. */
+.leaflet-container {
+  --mz-pin-size: 28px;
+  --mz-pin-dot-size: 12px;
+  --mz-label-font-size: 0.875rem;
+  --mz-label-line-height: 1.3125rem;
+  --mz-label-padding-block: 3px;
+}
+
+/* Leaflet gives this a 0×0 box (iconSize:[0,0]); max-content lets the pin size
+   itself and overflow:visible reveals the absolutely-positioned label. */
+.mz-pin-marker {
+  background: transparent;
+  border: 0;
+  width: max-content !important;
+  height: max-content !important;
+  overflow: visible;
+}
+
+.mz-pin-link {
+  position: relative;
+  display: inline-block;
+  width: var(--mz-pin-size);
+  height: var(--mz-pin-size);
+  /* iconAnchor:[0,0] puts the origin at the latlng; shift half the pin up+start
+     so its centre sits on the point. The label is absolute (below) so it never
+     moves the pin — keeping pins on their coordinate in both LTR and RTL. */
+  transform: translate(
+    calc(var(--mz-pin-size) / -2),
+    calc(var(--mz-pin-size) / -2)
+  );
+  transform-origin: center;
+  color: var(--card-foreground);
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+  transition:
+    transform 150ms ease,
+    filter 150ms ease;
+}
+
+.mz-pin-link:hover {
+  transform: translate(calc(var(--mz-pin-size) / -2), calc(var(--mz-pin-size) / -2))
+    scale(1.06);
+}
+.mz-pin-link.is-selected {
+  transform: translate(calc(var(--mz-pin-size) / -2), calc(var(--mz-pin-size) / -2))
+    scale(1.12);
+  /* Lift the selected pin off the map. */
+  filter: drop-shadow(0 4px 12px rgb(0 0 0 / 18%));
+  z-index: 1000;
+}
+
+.mz-pin {
+  position: relative;
+  display: inline-block;
+  width: var(--mz-pin-size);
+  height: var(--mz-pin-size);
+  flex-shrink: 0;
+}
+
+.mz-pin-halo {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  opacity: 0.2;
+}
+
+/* Live pulse on reporting pins (online, warning, and every alert severity);
+   offline pins stay static so the animation reads as "live data flowing". */
+.mz-pin--online .mz-pin-halo,
+.mz-pin--warning .mz-pin-halo,
+.mz-pin--yellow .mz-pin-halo,
+.mz-pin--orange .mz-pin-halo,
+.mz-pin--red .mz-pin-halo {
+  animation: mz-pin-pulse 2s ease-in-out infinite;
+  transform-origin: center;
+}
+
+.mz-pin-dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  /* Solid core inside the halo (Figma "Map Pin / Pin"). */
+  width: var(--mz-pin-dot-size);
+  height: var(--mz-pin-dot-size);
+  border-radius: 9999px;
+  transform: translate(-50%, -50%);
+  /* Card-colour ring so the dot reads as a ball above the halo. */
+  box-shadow:
+    0 0 0 2px var(--card),
+    0 1px 2px rgb(0 0 0 / 10%);
+}
+
+.mz-pin-label {
+  /* Name · hazard pill beside the pin — absolute so it stays out of the pin's
+     box; inset-inline-start places it after the pin (LTR) / before it (RTL).
+     inline-flex + gap spaces the name / separator / hazard word (mirrors the
+     public map's label). */
+  position: absolute;
+  top: 50%;
+  inset-inline-start: calc(100% + 4px);
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: var(--mz-label-padding-block) 8px;
+  border-radius: 100px;
+  background: var(--card);
+  border: 1px solid var(--border-subtle);
+  color: var(--card-foreground);
+  font-size: var(--mz-label-font-size);
+  line-height: var(--mz-label-line-height);
+  font-weight: 500;
+  box-shadow: var(--shadow-card);
+  white-space: nowrap;
+}
+
+@keyframes mz-pin-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.2;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 0.08;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .leaflet-tile,
+  .leaflet-overlay-pane path {
+    transition: none !important;
+  }
+  .mz-pin-link,
+  .mz-pin-link:hover,
+  .mz-pin-link.is-selected {
+    transition: none;
+    transform: translate(
+      calc(var(--mz-pin-size) / -2),
+      calc(var(--mz-pin-size) / -2)
+    );
+  }
+  .mz-pin--online .mz-pin-halo,
+  .mz-pin--warning .mz-pin-halo,
+  .mz-pin--yellow .mz-pin-halo,
+  .mz-pin--orange .mz-pin-halo,
+  .mz-pin--red .mz-pin-halo {
+    animation: none;
+  }
+}

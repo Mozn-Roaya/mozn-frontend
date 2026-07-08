@@ -1,0 +1,45 @@
+# ---- Dependencies ----
+node_modules/
+.pnp
+.pnp.*
+
+# ---- Next.js ----
+.next/
+out/
+build/
+next-env.d.ts
+*.tsbuildinfo
+
+# ---- Go ----
+server/bin/
+*.exe
+
+# ---- Env files ----
+.env
+.env.*
+!.env.example
+
+# ---- Logs / debug ----
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ---- Testing / coverage ----
+coverage/
+
+# ---- Tooling / local ----
+.claude/
+.playwright-cli/
+.superpowers/
+skills-lock.json
+.vercel
+
+# ---- OS / misc ----
+.DS_Store
+*.pem
+
+# ---- Temporary set-aside nested repos (do not commit) ----
+.git.bak/
+**/.git.bak/

@@ -1,0 +1,625 @@
+"use client";
+
+import * as React from "react";
+import Link from "next/link";
+import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
+import { useTheme } from "next-themes";
+import {
+  Check,
+  GripVertical,
+  Info,
+  MapPin,
+  Plus,
+  Radio,
+  Radar,
+  RotateCcw,
+  SquarePen,
+  Trash2,
+  TriangleAlert,
+} from "lucide-react";
+
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { toast } from "@/components/ui/toaster";
+import { useLocale } from "@/components/providers/locale-provider";
+import { useAdminConfig } from "@/components/providers/admin-config-provider";
+import { StationSummaryCard } from "@/components/station-detail/station-summary-card";
+import type { StationDetail } from "@/components/station-detail/station-detail";
+import {
+  DEFAULT_SENSORS,
+  isInLibya,
+  SENSORS,
+  STEP_OVERRIDE_EVENT,
+  type SensorKey,
+  type StationFormValue,
+  type StationInitialStatus,
+} from "./station-form-shared";
+
+// Leaflet touches `window` on import — load the picker client-only.
+const StationLocationPicker = dynamic(
+  () =>
+    import("@/components/maps/station-location-picker").then(
+      (m) => m.StationLocationPicker,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="absolute inset-0 grid place-items-center bg-secondary/50 text-sm text-muted-foreground">
+        …
+      </div>
+    ),
+  },
+);
+
+export interface StationFormInitial {
+  name: string;
+  nameAr: string;
+  region: string;
+  city?: string;
+  code?: string;
+}
+
+function hashCode(s: string): string {
+  let h = 0;
+  for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return `MZN-${String((h % 9000) + 1000)}`;
+}
+
+export function StationForm({
+  mode,
+  regions,
+  initial,
+}: {
+  mode: "create" | "edit";
+  regions: string[];
+  initial?: StationFormInitial;
+}) {
+  const { t, locale } = useLocale();
+  const router = useRouter();
+  const { resolvedTheme } = useTheme();
+  const theme = resolvedTheme === "dark" ? "dark" : "light";
+  const { contactsForCity, setCityContacts, templateSteps } = useAdminConfig();
+
+  const [form, setForm] = React.useState<StationFormValue>(() => ({
+    name: initial?.name ?? "",
+    nameAr: initial?.nameAr ?? "",
+    region: initial?.region ?? regions[0] ?? "",
+    city: initial?.city ?? initial?.name?.split(/\s+/)[0] ?? "",
+    lat: "",
+    lng: "",
+    status: "active",
+    protocol: "lora",
+    interval: "5",
+    sensors: SENSORS.reduce(
+      (acc, s) => ({ ...acc, [s]: DEFAULT_SENSORS.includes(s) }),
+      {} as Record<SensorKey, boolean>,
+    ),
+    overrideSteps: false,
+    steps: [],
+  }));
+
+  // Steps the station inherits from the flash-flood alert template (the event
+  // the public preview shows). Overriding seeds the editor from these.
+  const inheritedSteps = templateSteps[STEP_OVERRIDE_EVENT] ?? [];
+
+  const enableStepsOverride = () =>
+    setForm((f) => ({
+      ...f,
+      overrideSteps: true,
+      steps: f.steps.length > 0 ? f.steps : [...inheritedSteps],
+    }));
+  const revertStepsToTemplate = () => setForm((f) => ({ ...f, overrideSteps: false }));
+  const setStep = (i: number, lang: "en" | "ar", value: string) =>
+    setForm((f) => ({
+      ...f,
+      steps: f.steps.map((s, idx) => (idx === i ? { ...s, [lang]: value } : s)),
+    }));
+  const addStep = () => setForm((f) => ({ ...f, steps: [...f.steps, { en: "", ar: "" }] }));
+  const removeStep = (i: number) =>
+    setForm((f) => ({ ...f, steps: f.steps.filter((_, idx) => idx !== i) }));
+  const moveStep = (i: number, dir: -1 | 1) => moveStepTo(i, i + dir);
+  const moveStepTo = (from: number, to: number) =>
+    setForm((f) => {
+      if (to < 0 || to >= f.steps.length || from === to) return f;
+      const next = [...f.steps];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return { ...f, steps: next };
+    });
+
+  // Drag-to-reorder state for the step list (native HTML5 DnD, drag from handle).
+  const [dragStep, setDragStep] = React.useState<number | null>(null);
+  const [overStep, setOverStep] = React.useState<number | null>(null);
+  const endStepDrag = () => {
+    setDragStep(null);
+    setOverStep(null);
+  };
+
+  const set = <K extends keyof StationFormValue>(key: K, value: StationFormValue[K]) =>
+    setForm((f) => ({ ...f, [key]: value }));
+
+  const lat = parseFloat(form.lat);
+  const lng = parseFloat(form.lng);
+  const hasCoords = form.lat.trim() !== "" && form.lng.trim() !== "" && !Number.isNaN(lat) && !Number.isNaN(lng);
+  const inLibya = hasCoords && isInLibya(lat, lng);
+  const coordsInvalid = hasCoords && !inLibya;
+
+  const stationId = initial?.code ?? hashCode(form.name || "new");
+  const selectedSensors = SENSORS.filter((s) => form.sensors[s]);
+  const canSave = form.name.trim() !== "" && form.nameAr.trim() !== "" && !coordsInvalid && selectedSensors.length > 0;
+
+  // Public preview reflects only what's been entered so far — no live reading
+  // exists until the station is activated, so the summary card's weather
+  // section renders its own empty state.
+  const preview = React.useMemo<StationDetail>(
+    () => ({
+      name: form.name.trim() || "—",
+      nameAr: form.nameAr.trim() || undefined,
+      code: stationId,
+      region: form.region,
+      city: form.city.trim() || form.name.trim().split(/\s+/)[0],
+      availability: "live",
+      updated: "preview",
+    }),
+    [form, stationId],
+  );
+  const cityContacts = contactsForCity(form.city);
+
+  const save = () => {
+    if (!canSave) return;
+    if (mode === "edit") toast(t("stations.savedToast", { name: form.name.trim() }));
+    else toast(t("stations.addedToast", { name: form.name.trim(), region: t("region." + form.region) }));
+    router.push("/stations");
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header — title + actions. The section trail (Stations / Edit station)
+          lives in the topbar breadcrumb, so it isn't repeated here. */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold tracking-tight">
+            {mode === "edit" ? t("stations.editTitle") : t("stations.addStation")}
+          </h1>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button variant="outline" asChild>
+            <Link href="/stations">{t("common.cancel")}</Link>
+          </Button>
+          <Button onClick={save} disabled={!canSave}>
+            <Check className="size-4" />
+            {t("stations.saveActivate")}
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(360px,420px)]">
+        {/* Left — sectioned form */}
+        <div className="space-y-6">
+          {/* Identity */}
+          <Card className="p-6">
+            <SectionHead title={t("stations.section.identity")} hint={t("stations.identityHint")} />
+            <div className="mt-5 grid gap-4">
+              <Field label={t("stations.stationName")} htmlFor="st-name" required>
+                <Input
+                  id="st-name"
+                  value={form.name}
+                  onChange={(e) => set("name", e.target.value)}
+                  placeholder={t("stations.namePlaceholder")}
+                  autoFocus
+                />
+              </Field>
+              <Field label={t("stations.nameArabic")} htmlFor="st-name-ar" required>
+                <Input
+                  id="st-name-ar"
+                  value={form.nameAr}
+                  onChange={(e) => set("nameAr", e.target.value)}
+                  placeholder="طبرق الساحلية"
+                  dir="rtl"
+                />
+              </Field>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label={t("stations.region")} htmlFor="st-region">
+                  <Select value={form.region} onValueChange={(v) => set("region", v)}>
+                    <SelectTrigger id="st-region" className="w-full">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <MapPin className="size-4 shrink-0 text-muted-foreground" />
+                        <SelectValue />
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {regions.map((r) => (
+                        <SelectItem key={r} value={r}>{t("region." + r)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field label={t("stations.city")} htmlFor="st-city">
+                  <Input
+                    id="st-city"
+                    value={form.city}
+                    onChange={(e) => set("city", e.target.value)}
+                    placeholder={t("stations.cityPlaceholder")}
+                  />
+                </Field>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label={t("stations.stationId")} htmlFor="st-id">
+                  <Input id="st-id" value={stationId} readOnly dir="ltr" className="bg-secondary/60 text-muted-foreground" />
+                </Field>
+                <Field label={t("stations.initialStatus")} htmlFor="st-status">
+                  <Select value={form.status} onValueChange={(v) => set("status", v as StationInitialStatus)}>
+                    <SelectTrigger id="st-status" className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">{t("stations.status.active")}</SelectItem>
+                      <SelectItem value="maintenance">{t("status.maintenance")}</SelectItem>
+                      <SelectItem value="offline">{t("status.offline")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </div>
+            </div>
+          </Card>
+
+          {/* Location */}
+          <Card className="p-6">
+            <SectionHead title={t("stations.section.location")} hint={t("stations.locationHint")} />
+            {/* Interactive Libya map — click or drag the pin to set coordinates */}
+            <div className="relative mt-5 h-[620px] overflow-hidden rounded-2xl border border-border-subtle bg-secondary/50">
+              <StationLocationPicker
+                lat={hasCoords ? lat : undefined}
+                lng={hasCoords ? lng : undefined}
+                theme={theme}
+                onPick={(la, lo) => {
+                  set("lat", la.toFixed(4));
+                  set("lng", lo.toFixed(4));
+                }}
+              />
+            </div>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <Field label={t("stations.latitude")} htmlFor="st-lat">
+                <Input id="st-lat" type="number" step="any" dir="ltr" value={form.lat} onChange={(e) => set("lat", e.target.value)} placeholder="32.8872" aria-invalid={coordsInvalid} />
+              </Field>
+              <Field label={t("stations.longitude")} htmlFor="st-lng">
+                <Input id="st-lng" type="number" step="any" dir="ltr" value={form.lng} onChange={(e) => set("lng", e.target.value)} placeholder="13.1913" aria-invalid={coordsInvalid} />
+              </Field>
+            </div>
+            {/* Validation chips */}
+            {coordsInvalid ? (
+              <p className="mt-3 flex items-center gap-2 text-xs font-medium text-text-warning">
+                <TriangleAlert className="size-4 shrink-0" aria-hidden />
+                {t("stations.coordError")}
+              </p>
+            ) : inLibya ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Chip ok>{t("stations.chip.withinLibya")}</Chip>
+              </div>
+            ) : null}
+          </Card>
+
+          {/* Sensors */}
+          <Card className="p-6">
+            <SectionHead title={t("stations.section.sensors")} hint={t("stations.sensorsHint")} />
+            <div className="mt-5 grid grid-cols-2 gap-x-8 gap-y-3.5">
+              {SENSORS.map((s) => (
+                <label key={s} className="flex cursor-pointer items-center gap-2.5 text-sm">
+                  <Checkbox
+                    checked={form.sensors[s]}
+                    onCheckedChange={(v) => set("sensors", { ...form.sensors, [s]: Boolean(v) })}
+                  />
+                  <span className="font-medium text-foreground">{t("stations.sensor." + s)}</span>
+                </label>
+              ))}
+            </div>
+          </Card>
+
+          {/* Communication & Data */}
+          <Card className="p-6">
+            <SectionHead title={t("stations.section.comms")} />
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <Field label={t("stations.protocol")} htmlFor="st-protocol">
+                <Select value={form.protocol} onValueChange={(v) => set("protocol", v as StationFormValue["protocol"])}>
+                  <SelectTrigger id="st-protocol" className="w-full">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Radio className="size-4 shrink-0 text-muted-foreground" />
+                      <SelectValue />
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cellular">{t("stations.protocol.cellular")}</SelectItem>
+                    <SelectItem value="satellite">{t("stations.protocol.satellite")}</SelectItem>
+                    <SelectItem value="lora">{t("stations.protocol.lora")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label={t("stations.interval")} htmlFor="st-interval">
+                <Select value={form.interval} onValueChange={(v) => set("interval", v as StationFormValue["interval"])}>
+                  <SelectTrigger id="st-interval" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(["1", "5", "15", "60"] as const).map((m) => (
+                      <SelectItem key={m} value={m}>{t("stations.interval." + m)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
+          </Card>
+
+          {/* Emergency contacts — per city, shared by all stations in it */}
+          <Card className="p-6">
+            <SectionHead
+              title={t("stations.section.emergency")}
+              hint={form.city.trim() ? t("stations.emergencySharedHint", { city: form.city.trim() }) : undefined}
+            />
+            {form.city.trim() ? (
+              <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                <Field label={t("stations.emergencyServices")} htmlFor="st-emr-services">
+                  <Input
+                    id="st-emr-services"
+                    dir="ltr"
+                    inputMode="tel"
+                    value={cityContacts.emergencyServices}
+                    onChange={(e) => setCityContacts(form.city, { ...cityContacts, emergencyServices: e.target.value })}
+                  />
+                </Field>
+                <Field label={t("stations.civilDefense")} htmlFor="st-emr-civil">
+                  <Input
+                    id="st-emr-civil"
+                    dir="ltr"
+                    inputMode="tel"
+                    value={cityContacts.civilDefense}
+                    onChange={(e) => setCityContacts(form.city, { ...cityContacts, civilDefense: e.target.value })}
+                  />
+                </Field>
+              </div>
+            ) : (
+              <p className="mt-4 rounded-xl border border-dashed border-border bg-secondary/40 py-6 text-center text-sm text-muted-foreground">
+                {t("stations.emergencyNeedsCity")}
+              </p>
+            )}
+          </Card>
+
+          {/* Response steps — inherited from the flash-flood alert template by
+              default; can be overridden for this station only. */}
+          <Card className="p-6">
+            <SectionHead title={t("stations.section.steps")} hint={t("stations.stepsHint")} />
+
+            {!form.overrideSteps ? (
+              <div className="mt-5 space-y-4">
+                <div className="rounded-2xl border border-border-subtle bg-secondary/40 p-4">
+                  <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+                    <Info className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                    {t("stations.stepsInheritedTitle", {
+                      event: t("templates.event." + STEP_OVERRIDE_EVENT),
+                    })}
+                  </p>
+                  {inheritedSteps.length > 0 ? (
+                    <ol className="mt-3 flex flex-col gap-2.5">
+                      {inheritedSteps.map((step, i) => (
+                        <li key={i} className="flex items-start gap-2.5">
+                          <span className="grid size-5 shrink-0 place-items-center rounded-full bg-brand-subtle text-[10px] font-semibold tabular-nums text-brand-foreground">
+                            {i + 1}
+                          </span>
+                          <span className="text-xs leading-relaxed text-muted-foreground">
+                            {locale === "ar" ? step.ar || step.en : step.en || step.ar}
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {t("stations.stepsInheritedEmpty")}
+                    </p>
+                  )}
+                </div>
+                <Button variant="outline" size="sm" className="w-fit" onClick={enableStepsOverride}>
+                  <SquarePen className="size-4" />
+                  {t("stations.stepsOverrideBtn")}
+                </Button>
+              </div>
+            ) : (
+              <div className="mt-5 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span
+                    data-slot="pill"
+                    className="inline-flex items-center gap-1.5 rounded-md border border-brand-foreground/20 bg-brand-subtle px-2 py-1 text-xs font-semibold text-brand-foreground"
+                  >
+                    <SquarePen className="size-3.5" aria-hidden />
+                    {t("stations.stepsOverrideActive")}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-muted-foreground"
+                    onClick={revertStepsToTemplate}
+                  >
+                    <RotateCcw className="size-4" />
+                    {t("stations.stepsRevert")}
+                  </Button>
+                </div>
+
+                {/* Drag a row by its handle to reorder; the handle is also
+                    keyboard-operable (ArrowUp/ArrowDown) for a11y. */}
+                <ul className="grid gap-2">
+                  {form.steps.length === 0 ? (
+                    <p className="rounded-xl border border-dashed border-border bg-secondary/40 py-6 text-center text-sm text-muted-foreground">
+                      {t("stations.noSteps")}
+                    </p>
+                  ) : (
+                    form.steps.map((step, i) => (
+                      <li
+                        key={i}
+                        data-step-row
+                        onDragOver={(e) => {
+                          if (dragStep === null) return;
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = "move";
+                          if (overStep !== i) setOverStep(i);
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          if (dragStep !== null) moveStepTo(dragStep, i);
+                          endStepDrag();
+                        }}
+                        className={cn(
+                          "flex items-start gap-2 rounded-lg transition-colors",
+                          dragStep === i && "opacity-40",
+                          overStep === i &&
+                            dragStep !== null &&
+                            dragStep !== i &&
+                            "bg-brand-subtle/50 ring-2 ring-inset ring-brand-foreground/40",
+                        )}
+                      >
+                        <button
+                          type="button"
+                          draggable
+                          onDragStart={(e) => {
+                            setDragStep(i);
+                            e.dataTransfer.effectAllowed = "move";
+                            // Default drag image (the small handle) — a custom
+                            // full-row image renders off-screen in RTL.
+                            e.dataTransfer.setData("text/plain", String(i));
+                          }}
+                          onDragEnd={endStepDrag}
+                          onKeyDown={(e) => {
+                            if (e.key === "ArrowUp") {
+                              e.preventDefault();
+                              moveStep(i, -1);
+                            } else if (e.key === "ArrowDown") {
+                              e.preventDefault();
+                              moveStep(i, 1);
+                            }
+                          }}
+                          className="mt-1 grid size-8 shrink-0 cursor-grab touch-none place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
+                          aria-label={t("stations.dragStep", { n: i + 1 })}
+                          title={t("stations.dragStep", { n: i + 1 })}
+                        >
+                          <GripVertical className="size-4" aria-hidden />
+                        </button>
+                        <span className="mt-1 grid size-8 shrink-0 place-items-center rounded-full bg-brand-subtle text-xs font-semibold tabular-nums text-brand-foreground">
+                          {i + 1}
+                        </span>
+                        {/* Both language versions of the one step, kept paired. */}
+                        <div className="grid flex-1 gap-1.5">
+                          <Input
+                            value={step.en}
+                            dir="ltr"
+                            onChange={(e) => setStep(i, "en", e.target.value)}
+                            placeholder={t("templates.stepHint.en")}
+                            aria-label={t("templates.stepEn", { n: i + 1 })}
+                          />
+                          <Input
+                            value={step.ar}
+                            dir="rtl"
+                            onChange={(e) => setStep(i, "ar", e.target.value)}
+                            placeholder={t("templates.stepHint.ar")}
+                            aria-label={t("templates.stepAr", { n: i + 1 })}
+                          />
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="mt-1 size-8 shrink-0 text-muted-foreground hover:text-text-warning"
+                          onClick={() => removeStep(i)}
+                          aria-label={t("stations.removeStep")}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </li>
+                    ))
+                  )}
+                </ul>
+
+                <Button variant="outline" size="sm" className="w-fit" onClick={addStep}>
+                  <Plus className="size-4" />
+                  {t("stations.addStep")}
+                </Button>
+                <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                  <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                  {t("stations.stepsOverrideNote")}
+                </p>
+              </div>
+            )}
+          </Card>
+        </div>
+
+        {/* Right — live Public Preview (sticky) */}
+        <div className="lg:sticky lg:top-24">
+          <div className="rounded-2xl border border-border-subtle bg-secondary/40 p-5">
+            <div className="flex items-center gap-2 text-brand-foreground">
+              <Radar className="size-4" aria-hidden />
+              <span className="text-sm font-semibold">{t("stations.previewEyebrow")}</span>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">{t("stations.previewHint")}</p>
+
+            <div className="mt-4 rounded-2xl border border-border bg-background p-5 shadow-card">
+              <StationSummaryCard detail={preview} onClose={() => {}} />
+            </div>
+
+            <p className="mt-4 flex items-start gap-2 rounded-xl bg-text-link/10 px-3.5 py-3 text-xs leading-relaxed text-text-link">
+              <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
+              {t("stations.previewActivateNote")}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SectionHead({ title, hint }: { title: string; hint?: string }) {
+  return (
+    <div>
+      <h2 className="text-lg font-semibold tracking-tight text-foreground">{title}</h2>
+      {hint ? <p className="mt-0.5 text-sm text-muted-foreground">{hint}</p> : null}
+    </div>
+  );
+}
+
+function Field({
+  label,
+  htmlFor,
+  required,
+  children,
+}: {
+  label: string;
+  htmlFor?: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="grid gap-2">
+      <label htmlFor={htmlFor} className="text-sm font-medium text-foreground">
+        {label}
+        {required ? <span className="text-destructive"> *</span> : null}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function Chip({
+  children,
+  ok,
+}: {
+  children: React.ReactNode;
+  ok?: boolean;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-secondary/60 px-2 py-1 text-xs font-medium text-foreground">
+      {ok ? <Check className="size-3.5 text-status-normal" /> : null}
+      {children}
+    </span>
+  );
+}

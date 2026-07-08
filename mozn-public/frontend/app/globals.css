@@ -1,0 +1,598 @@
+@import "tailwindcss";
+/* Into `base` so our own `.leaflet-container` overrides (font, background,
+   outline) win by source order. Left unlayered, Leaflet's stylesheet would
+   outrank everything in `@layer base` and force its Helvetica font onto map
+   text — e.g. the Cairo RTL pin labels. */
+@import "leaflet/dist/leaflet.css" layer(base);
+
+/* =============================================================================
+ * Mozn — Early Warning System · design system
+ *
+ * Source of truth: Figma "Mozn | Early Warning System"
+ *   https://www.figma.com/design/LrEvjNZAjFWkjpeCiMq52R
+ *
+ * Architecture (Tailwind v4, two tiers):
+ *
+ *   TIER 1 — @theme  · design tokens that GENERATE utilities and never change
+ *            between themes: the colour ramps, status/severity swatches, the
+ *            chart series palette, the type scale, spacing, radius, shadow and
+ *            motion. Referenced as utilities (`bg-grey-50`, `text-body-sm`,
+ *            `shadow-card`, `stroke-chart-1`) and, where needed, as vars.
+ *
+ *   TIER 2 — :root / [data-theme="dark"]  · the SEMANTIC theming layer. These
+ *            alias tier-1 primitives to intent (`--color-bg-primary`,
+ *            `--color-text-muted`). They are consumed via the v4 var shorthand
+ *            — `bg-(--color-bg-primary)`, `text-(--color-text-muted)` — and are
+ *            flipped wholesale for dark mode by re-declaring them under
+ *            `html[data-theme="dark"]`. Keeping them out of `@theme` avoids
+ *            emitting the awkward `bg-bg-primary` utilities and makes the
+ *            light→dark contract a single, readable block.
+ *
+ * Adding a token:
+ *   • A new primitive / scale value that should become a utility → `@theme`.
+ *   • A new intent that flips per theme → the `:root` + dark blocks below.
+ *   • Names mirror Figma (`bg-primary`, `text-secondary`, …). Figma spells the
+ *     neutral/blue ramps `gray-*` / `sky-*`; this file keeps `grey-*` /
+ *     `sky-blue-*` (identical values) to stay consistent with existing usage.
+ * ============================================================================= */
+
+/* Dark mode is an attribute strategy: the semantic layer flips under
+ * `html[data-theme="dark"]`. Registering the matching `dark:` variant gives a
+ * single source of truth for the rare component that needs a one-off override. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* =============================================================================
+ * TIER 1 — Design tokens (@theme) — utility-generating, theme-invariant
+ * ============================================================================= */
+
+@theme {
+  /* --------------------------------------------------------------------------
+   * Colour ramps (primitives)
+   *
+   * Theme-invariant. Bind components to the semantic aliases (tier 2) rather
+   * than these, unless a fixed brand accent is genuinely intended.
+   * -------------------------------------------------------------------------- */
+
+  --color-brand-blue-50:  #e6ebf2;
+  --color-brand-blue-100: #b3c2d9;
+  --color-brand-blue-200: #8099bf;
+  --color-brand-blue-300: #4d70a6;
+  --color-brand-blue-400: #1a478c;
+  --color-brand-blue-500: #032460;
+  --color-brand-blue-600: #021d4d;
+  --color-brand-blue-700: #02163a;
+  --color-brand-blue-800: #010f27;
+  --color-brand-blue-900: #010814;
+
+  --color-sky-blue-50:  #ebf5fc;
+  --color-sky-blue-100: #c8e2f5;
+  --color-sky-blue-200: #a5d0ef;
+  --color-sky-blue-300: #81bee9;
+  --color-sky-blue-400: #5eace3;
+  --color-sky-blue-500: #3b99dd;
+  --color-sky-blue-600: #2f7ab1;
+  --color-sky-blue-700: #235c85;
+  --color-sky-blue-800: #183d58;
+  --color-sky-blue-900: #0c1f2c;
+
+  --color-grey-0:   #ffffff;
+  --color-grey-50:  #f7f7f8;
+  --color-grey-100: #ededf0;
+  --color-grey-200: #d4d4d9;
+  --color-grey-300: #b0b0b8;
+  --color-grey-400: #8c8c96;
+  --color-grey-500: #6e6e78;
+  --color-grey-600: #54545c;
+  --color-grey-700: #3a3a42;
+  --color-grey-800: #1f1e24;
+  --color-grey-900: #121115;
+
+  /* Operational status — 500 for dots/icons/accents (theme-invariant), 100 for
+     light tints. Advisory is the amber "watch" tier from the Figma design
+     system (Colors/Status — Advisory/500), sitting between Normal and Warning. */
+  --color-status-normal-100:   #d1fae5;
+  --color-status-normal-500:   #10b981;
+  --color-status-info-100:     #d6eaff;
+  --color-status-info-500:     #2f80ed;
+  --color-status-advisory-500: #f59e0b;
+  --color-status-warning-100:  #fee2e2;
+  --color-status-warning-500:  #ef4444;
+  --color-status-critical-100: #fecaca;
+  --color-status-critical-500: #b91c1c;
+  --color-status-offline-100:  #e5e7eb;
+  --color-status-offline-400:  #9ca3af;
+
+  /* Alert severity (API: yellow | orange | red) — distinct hues so a glance at
+     the map separates a watch from a warning from a severe alert. */
+  --color-severity-yellow-500: #eab308;
+  --color-severity-orange-500: #f97316;
+  --color-severity-red-500:    #dc2626;
+
+  /* Data-visualization series palette (Figma `color/chart/*`). Theme-invariant
+     categorical hues + the axis colour; the neutral gridline/track flip per
+     theme and live in the semantic layer. Bound to ramp primitives so a series
+     stays in sync with the rest of the system. */
+  --color-chart-1:      var(--color-sky-blue-500);       /* #3b99dd */
+  --color-chart-2:      var(--color-status-normal-500);  /* #10b981 */
+  --color-chart-3:      var(--color-brand-blue-400);     /* #1a478c */
+  --color-chart-4:      var(--color-status-advisory-500);/* #f59e0b */
+  --color-chart-5:      var(--color-severity-orange-500);/* #f97316 */
+  --color-chart-danger: var(--color-status-warning-500); /* #ef4444 */
+  --color-chart-axis:   var(--color-grey-400);           /* #8c8c96 */
+
+  /* --------------------------------------------------------------------------
+   * Typography
+   *
+   * `--text-<name>` pairs with `--text-<name>--line-height` so one utility
+   * (`text-body-sm`) sets size + line-height together. Weight composes at the
+   * call site (`font-medium | font-semibold | font-bold`) so Heading/Body/Label
+   * can reuse a size at different weights.
+   * -------------------------------------------------------------------------- */
+
+  --font-sans: var(--font-poppins, "Poppins"), "Poppins", "Poppins Fallback",
+    Arial, Helvetica, sans-serif;
+  --default-font-family: var(--font-sans);
+
+  /* Display — 700 */
+  --text-display-xl: 62px;  --text-display-xl--line-height: 68px;
+  --text-display-lg: 48px;  --text-display-lg--line-height: 68px;
+  --text-display-md: 38px;  --text-display-md--line-height: 48px;
+  --text-display-sm: 34px;  --text-display-sm--line-height: 48px;
+
+  /* Heading — 700 default, 600 alternate */
+  --text-heading-xl: 28px;  --text-heading-xl--line-height: 36px;
+  --text-heading-lg: 24px;  --text-heading-lg--line-height: 32px;
+  --text-heading-md: 20px;  --text-heading-md--line-height: 30px;
+  --text-heading-sm: 18px;  --text-heading-sm--line-height: 27px;
+  --text-heading-xs: 16px;  --text-heading-xs--line-height: 24px;
+
+  /* Body — 400 default */
+  --text-body-xl:  20px;  --text-body-xl--line-height:  30px;
+  --text-body-lg:  18px;  --text-body-lg--line-height:  27px;
+  --text-body-md:  16px;  --text-body-md--line-height:  24px;
+  --text-body-sm:  14px;  --text-body-sm--line-height:  21px;
+  --text-body-xs:  12px;  --text-body-xs--line-height:  18px;
+  --text-body-xxs: 10px;  --text-body-xxs--line-height: 16px;
+
+  /* Label — 600. Line-height normal; tracking added at the call site. */
+  --text-label-lg: 14px;  --text-label-lg--line-height: normal;
+  --text-label-md: 12px;  --text-label-md--line-height: normal;
+  --text-label-sm: 10px;  --text-label-sm--line-height: normal;
+
+  /* Overline — 12px / 600, uppercase with wide tracking (Figma `Overline`,
+     letterSpacing 12 → 0.12em). Pair with `uppercase tracking-overline`. */
+  --text-overline: 12px;  --text-overline--line-height: normal;
+  --tracking-overline: 0.12em;
+
+  /* --------------------------------------------------------------------------
+   * Spacing & radius
+   *
+   * `--spacing: 4px` is the base unit — `p-1` = 4px, `p-4` = 16px, `gap-2` =
+   * 8px. Matches the Figma 4px grid.
+   * -------------------------------------------------------------------------- */
+
+  --spacing: 4px;
+
+  --radius-none: 0;
+  --radius-sm:   2px;
+  --radius-md:   4px;
+  --radius-lg:   8px;
+  --radius-xl:   12px;
+  --radius-2xl:  16px;
+  --radius-3xl:  24px;
+  --radius-full: 9999px;
+
+  /* --------------------------------------------------------------------------
+   * Layout grid  (Figma "Grid & Layout" · node 304:818)
+   *
+   * Map-first layout: full-bleed map canvas, fixed top bar, floating controls,
+   * a slide-in right rail. The three device tiers are exposed as
+   * `--container-*` (→ `max-w-mobile/tablet/desktop` + `@container` sizes);
+   * everything else rides the 4px `--spacing` base:
+   *   • Page margin (inline):  16 / 24 / 80   → px-4 / md:px-6 / lg:px-20
+   *   • Map controls:          32 / 40 / 44   → size-8 / md:size-10 / lg:size-11
+   *   • Station rail:          416            → w-104  (desktop, x 1024)
+   *   • Panel content:         368 = 172 + 24 + 172   (two metric cards + gutter)
+   *   • Panel gutter & rhythm: 24             → gap-6  (card grid + vertical stack)
+   * Breakpoints stay on Tailwind's defaults (md 768 / lg 1024); they fall
+   * between the design's device tiers, which is where layout should reflow.
+   * -------------------------------------------------------------------------- */
+
+  --container-mobile:  390px;
+  --container-tablet:  834px;
+  --container-desktop: 1440px;
+
+  /* --------------------------------------------------------------------------
+   * Elevation
+   * -------------------------------------------------------------------------- */
+
+  /* Figma `shadow/card` — a tight contact shadow + a softer ambient one. */
+  --shadow-card:     0 1px 2px 0 rgb(0 0 0 / 5%), 0 2px 6px -1px rgb(0 0 0 / 4%);
+  --shadow-pin:      0 2px 3px 0 rgb(33 41 51 / 5%);
+  --shadow-legend:   0 2px 4px 0 rgb(33 41 51 / 6%);
+  --shadow-elevated: 0 4px 12px 0 rgb(0  0  0  / 18%);
+  /* Figma Expanded Panel elevation (232:2 / 268:81): ambient drop + hairline
+     ring + tight contact. */
+  --shadow-modal:    0 12px 40px 0 rgb(0 0 38 / 14%),
+                     0 0 0 1px rgb(34 42 53 / 8%),
+                     0 1px 5px -4px rgb(19 19 22 / 50%);
+  /* Figma `shadow/sheet` — upward-casting elevation for the mobile bottom
+     sheet (station panel). */
+  --shadow-sheet:    0 -8px 32px -4px rgb(0 0 0 / 8%),
+                     0 -1px 3px 0 rgb(0 0 0 / 4%);
+
+  /* --------------------------------------------------------------------------
+   * Motion — restrained on purpose (this is an operations interface).
+   *   fast 150ms · base 180ms · medium 280ms · slow 700ms (map fly only)
+   * `--default-transition-*` make bare `transition-*` utilities inherit the
+   * standard ease + base duration. `--duration-*` is not a v4 namespace →
+   * reference as `duration-[var(--duration-medium)]`.
+   * -------------------------------------------------------------------------- */
+
+  --duration-fast:   150ms;
+  --duration-base:   180ms;
+  --duration-medium: 280ms;
+  --duration-slow:   700ms;
+
+  --ease-standard:   cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(0.3, 0, 0, 1.05);
+
+  --default-transition-duration:        var(--duration-base);
+  --default-transition-timing-function: var(--ease-standard);
+
+  /* `--animate-{name}` generates `animate-{name}`; keyframes defined below. */
+  --animate-pin-pulse: mz-pin-pulse 2s ease-in-out infinite;
+
+  /* --------------------------------------------------------------------------
+   * Z-index — not a v4 namespace (no `z-*` utilities). Reference via
+   * `z-[var(--z-top-bar)]` or `style={{ zIndex: … }}`. Ordered top-to-bottom.
+   * -------------------------------------------------------------------------- */
+
+  --z-raised:  10;
+  --z-top-bar: 30;
+  --z-popover: 40;
+  --z-overlay: 1000;
+  --z-modal:   1100;
+  --z-toast:   1200;
+}
+
+/* =============================================================================
+ * Keyframes (referenced by `--animate-*`)
+ * ============================================================================= */
+
+@keyframes mz-pin-pulse {
+  0%, 100% { transform: scale(1);    opacity: 0.2;  }
+  50%      { transform: scale(1.35); opacity: 0.08; }
+}
+
+/* =============================================================================
+ * TIER 2 — Semantic theming layer + document base
+ *
+ * Lives in `@layer base` so utilities win without `!important`. Semantic
+ * aliases are declared on `:root` (light) and re-declared under
+ * `html[data-theme="dark"]` (dark). Components read them via the var shorthand
+ * (`bg-(--color-bg-primary)`), so flipping a theme is a single edit here.
+ * ============================================================================= */
+
+@layer base {
+  :root {
+    /* Surfaces */
+    --color-bg-primary:      var(--color-grey-0);
+    --color-bg-secondary:    var(--color-grey-50);
+    --color-bg-tertiary:     var(--color-grey-100);
+    --color-bg-inverse:      var(--color-grey-800);
+    --color-bg-brand:        var(--color-brand-blue-500);
+    --color-bg-brand-subtle: var(--color-brand-blue-50);
+    --color-bg-overlay:      color-mix(in srgb, var(--color-grey-800) 70%, transparent);
+    --color-bg-canvas:       var(--color-grey-50);
+
+    /* Per-severity surfaces (solid light tints; dark flips to translucent). */
+    --color-bg-normal-subtle:   var(--color-status-normal-100);
+    --color-bg-info-subtle:     var(--color-status-info-100);
+    --color-bg-warning-subtle:  var(--color-status-warning-100);
+    --color-bg-critical-subtle: var(--color-status-critical-100);
+    --color-bg-offline-subtle:  var(--color-status-offline-100);
+
+    /* Alert-severity surfaces — `*-subtle` for the header band, `*-step` for
+       the numbered guidance badges. */
+    --color-bg-severity-yellow-subtle: #fef9c3;
+    --color-bg-severity-orange-subtle: #ffedd5;
+    --color-bg-severity-red-subtle:    #fee2e2;
+    --color-bg-severity-yellow-step:   #fef08a;
+    --color-bg-severity-orange-step:   #fed7aa;
+    --color-bg-severity-red-step:      #fecaca;
+
+    /* Text */
+    --color-text-primary:   var(--color-grey-800);
+    --color-text-secondary: var(--color-grey-600);
+    --color-text-muted:     var(--color-grey-500);   /* Figma text-muted #6e6e78 */
+    --color-text-inverse:   var(--color-grey-0);
+    --color-text-brand:     var(--color-brand-blue-500);
+    --color-text-link:      var(--color-sky-blue-500);
+    --color-text-warning:   var(--color-severity-red-500); /* #dc2626 — darker than the surface */
+
+    /* Borders */
+    --color-border-subtle:  var(--color-grey-100);
+    --color-border-default: var(--color-grey-200);
+    --color-border-strong:  var(--color-grey-300);
+    --color-border-focus:   var(--color-sky-blue-500);
+    --color-border-brand:   var(--color-brand-blue-500);
+
+    /* Interactive */
+    --color-interactive-default:         var(--color-brand-blue-500);
+    --color-interactive-hover:           var(--color-brand-blue-600);
+    --color-interactive-active:          var(--color-brand-blue-700);
+    --color-interactive-secondary:       var(--color-sky-blue-500);
+    --color-interactive-secondary-hover: var(--color-sky-blue-600);
+    --color-interactive-disabled-bg:     var(--color-grey-100);
+    --color-interactive-disabled-text:   var(--color-grey-300);
+
+    /* Chart furniture (theme-aware; the series hues in tier 1 stay constant). */
+    --color-chart-track: var(--color-grey-100);
+    --color-chart-grid:  var(--color-grey-100);
+  }
+
+  /* Dark theme — re-declares the semantic layer only; tier-1 primitives stay
+     constant, so every component reading a semantic var switches for free. */
+  html[data-theme="dark"] {
+    color-scheme: dark;
+    scrollbar-color: var(--color-grey-600) transparent;
+
+    --color-bg-primary:   var(--color-grey-800);
+    --color-bg-secondary: var(--color-grey-700);
+    --color-bg-tertiary:  var(--color-grey-600);
+    --color-bg-inverse:   var(--color-grey-0);
+    --color-bg-canvas:    var(--color-grey-900);
+    --color-bg-overlay:   rgb(0 0 0 / 70%);
+
+    /* The light `*-100` solids would burn out on a dark canvas, so use
+       translucent saturated tints derived from each primitive via `color-mix`
+       (the tint tracks the token — no hand-copied rgb triples to drift). */
+    --color-bg-normal-subtle:   color-mix(in srgb, var(--color-status-normal-500)   16%, transparent);
+    --color-bg-info-subtle:     color-mix(in srgb, var(--color-status-info-500)     18%, transparent);
+    --color-bg-warning-subtle:  color-mix(in srgb, var(--color-status-warning-500)  18%, transparent);
+    --color-bg-critical-subtle: color-mix(in srgb, var(--color-status-critical-500) 22%, transparent);
+    --color-bg-offline-subtle:  color-mix(in srgb, var(--color-status-offline-400)  15%, transparent);
+
+    --color-bg-severity-yellow-subtle: color-mix(in srgb, var(--color-severity-yellow-500) 18%, transparent);
+    --color-bg-severity-orange-subtle: color-mix(in srgb, var(--color-severity-orange-500) 18%, transparent);
+    --color-bg-severity-red-subtle:    color-mix(in srgb, var(--color-severity-red-500)    18%, transparent);
+    --color-bg-severity-yellow-step:   color-mix(in srgb, var(--color-severity-yellow-500) 30%, transparent);
+    --color-bg-severity-orange-step:   color-mix(in srgb, var(--color-severity-orange-500) 30%, transparent);
+    --color-bg-severity-red-step:      color-mix(in srgb, var(--color-severity-red-500)    30%, transparent);
+
+    --color-text-primary:   var(--color-grey-50);
+    --color-text-secondary: var(--color-grey-200);
+    --color-text-muted:     var(--color-grey-400);
+    --color-text-inverse:   var(--color-grey-800);
+
+    --color-border-subtle:  var(--color-grey-700);
+    --color-border-default: var(--color-grey-600);
+    --color-border-strong:  var(--color-grey-500);
+
+    /* Chart furniture flips; series hues (chart-1..5, danger) stay constant. */
+    --color-chart-track: var(--color-grey-700);
+    --color-chart-grid:  var(--color-grey-700);
+  }
+
+  html,
+  body {
+    color-scheme: light;
+    background: var(--color-bg-canvas);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Thin theme-aware scrollbars — Chrome/Firefox both honor these. */
+    scrollbar-color: var(--color-grey-300) transparent;
+    scrollbar-width: thin;
+  }
+
+  /* Arabic (RTL) swaps the sans stack to Cairo while keeping the exact same
+     type scale, weights, spacing and semantic tokens — only the family
+     changes. Overriding `--font-sans` cascades to `body` and every
+     `font-sans`/`text-*` utility since they all resolve `var(--font-sans)`. */
+  html[lang="ar"] {
+    --font-sans: var(--font-cairo, "Cairo"), "Cairo", "Segoe UI", Tahoma,
+      Arial, sans-serif;
+  }
+
+  ::selection {
+    background: var(--color-brand-blue-500);
+    color: var(--color-text-inverse);
+  }
+
+  /* One-shot theme transition. `ThemeToggle` adds `.mz-theme-transition` to
+     <html> just before flipping `data-theme`, then strips it ~320ms later so
+     unrelated repaints don't get caught up. Scoped to colour-bearing
+     properties only; transforms and sizes are left alone.
+
+     The Leaflet subtree is excluded: it holds hundreds of nodes (tiles, geojson
+     paths, 43 pins × spans) and animating colour on all of them — while Leaflet
+     simultaneously swaps the basemap layer and restyles paths — caused a
+     repaint storm (slow toggle + map glitch). The map recolours instantly and
+     keeps its own dedicated transitions (`.leaflet-tile`, `.leaflet-overlay-pane
+     path`) below. */
+  html.mz-theme-transition,
+  html.mz-theme-transition *:not(.leaflet-container, .leaflet-container *) {
+    transition:
+      background-color var(--duration-medium) var(--ease-standard),
+      color            var(--duration-medium) var(--ease-standard),
+      border-color     var(--duration-medium) var(--ease-standard),
+      fill             var(--duration-medium) var(--ease-standard),
+      stroke           var(--duration-medium) var(--ease-standard),
+      box-shadow       var(--duration-medium) var(--ease-standard) !important;
+  }
+}
+
+/* =============================================================================
+ * Component layer
+ *
+ * Mozn-specific primitives that are NOT Tailwind utilities. In
+ * `@layer components` so utility classes win without `!important`.
+ * ============================================================================= */
+
+@layer components {
+  /* The logo light/dark swap is handled in the component via `dark:` utilities
+     (see components/ui/logo.tsx) — a `@layer components` rule would lose to
+     Tailwind's `.hidden` utility under v4 cascade layers. */
+
+  /* -------------- Leaflet · basemap + GeoJSON overrides --------------------
+     Theme-aware container + smooth basemap/path swap when the theme flips. */
+  .leaflet-container {
+    background: var(--color-bg-canvas);
+    font-family: var(--font-sans);
+    outline: none;
+  }
+  .leaflet-container a { color: inherit; }
+
+  .leaflet-tile {
+    transition: filter var(--duration-medium) var(--ease-standard);
+  }
+  .leaflet-overlay-pane path {
+    transition:
+      fill         var(--duration-medium) var(--ease-standard),
+      stroke       var(--duration-medium) var(--ease-standard),
+      fill-opacity var(--duration-medium) var(--ease-standard);
+  }
+
+  /* -------------- Station pin marker (Leaflet divIcon) ---------------------
+     Pin geometry mirrors Figma 385:26 — 28×28 halo, 12×12 dot, plus a pill
+     label beside the pin. The marker container has 0×0 dimensions from
+     Leaflet's `iconSize: [0, 0]`; `max-content` stops the inline-flex contents
+     from wrapping (label stacking below the pin). */
+  .mz-pin-marker {
+    background: transparent;
+    border: 0;
+    width: max-content !important;
+    height: max-content !important;
+    overflow: visible;
+    /* Marker geometry is anchored by `translate(-14px)` assuming the pin is the
+       flex row's first (leftmost) child. Force LTR so RTL (Arabic) doesn't
+       reverse that order and fling the dot ~a label-width off its coordinate.
+       The label keeps its own script direction via `dir="auto"`. */
+    direction: ltr;
+  }
+
+  .mz-pin-link {
+    display: inline-flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 4px;
+    width: max-content;
+    /* `iconAnchor: [0, 0]` puts the origin at the latlng; translate half the
+       pin up + left so its centre sits on the point. */
+    transform: translate(-14px, -14px);
+    transform-origin: 14px 14px;
+    text-decoration: none;
+    color: var(--color-text-primary);
+    white-space: nowrap;
+    pointer-events: auto;
+    transition:
+      transform var(--duration-base) var(--ease-standard),
+      filter    var(--duration-base) var(--ease-standard);
+  }
+
+  .mz-pin-link:hover         { transform: translate(-14px, -14px) scale(1.06); }
+  .mz-pin-link.is-selected   {
+    transform: translate(-14px, -14px) scale(1.12);
+    filter: drop-shadow(var(--shadow-elevated));
+    z-index: var(--z-raised);
+  }
+
+  .mz-pin {
+    position: relative;
+    display: inline-block;
+    width:  28px;
+    height: 28px;
+    flex-shrink: 0;
+  }
+
+  .mz-pin-halo {
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    opacity: 0.2;
+  }
+
+  /* Live-signal pulse on reporting pins (normal + all alert severities).
+     Offline pins stay static so the animation reads as "live data flowing". */
+  .mz-pin--normal  .mz-pin-halo,
+  .mz-pin--warning .mz-pin-halo,
+  .mz-pin--yellow  .mz-pin-halo,
+  .mz-pin--orange  .mz-pin-halo,
+  .mz-pin--red     .mz-pin-halo {
+    animation: var(--animate-pin-pulse);
+    transform-origin: center;
+  }
+
+  .mz-pin-dot {
+    position: absolute;
+    left: 50%;
+    top:  50%;
+    width:  12px;
+    height: 12px;
+    border-radius: 9999px;
+    transform: translate(-50%, -50%);
+    /* 2px ring in the canvas colour so the dot reads as a ball floating above
+       the halo (Figma 385:26). */
+    box-shadow:
+      0 0 0 2px var(--color-bg-primary),
+      0 1px 2px rgb(0 0 0 / 10%);
+  }
+
+  .mz-pin-label {
+    display: inline-flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    padding: 3px 8px;
+    border-radius: 100px;
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-border-subtle);
+    color: var(--color-text-primary);
+    font-size:   var(--text-body-sm);
+    line-height: var(--text-body-sm--line-height);
+    font-weight: 500;
+    box-shadow: var(--shadow-pin);
+    white-space: nowrap;
+  }
+}
+
+/* =============================================================================
+ * Reduced motion
+ *
+ * Single auditable block. Anything animated above MUST appear here — a new
+ * animation without a matching entry means incomplete coverage. WCAG 2.3.3.
+ * ============================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  html.mz-theme-transition,
+  html.mz-theme-transition * {
+    transition: none !important;
+  }
+
+  .leaflet-tile,
+  .leaflet-overlay-pane path {
+    transition: none !important;
+  }
+
+  .mz-pin-link,
+  .mz-pin-link:hover,
+  .mz-pin-link.is-selected {
+    transition: none;
+    /* Keep the position-correcting translate; drop the hover/select scale. */
+    transform: translate(-14px, -14px);
+  }
+
+  .mz-pin--normal  .mz-pin-halo,
+  .mz-pin--warning .mz-pin-halo,
+  .mz-pin--yellow  .mz-pin-halo,
+  .mz-pin--orange  .mz-pin-halo,
+  .mz-pin--red     .mz-pin-halo {
+    animation: none;
+  }
+}

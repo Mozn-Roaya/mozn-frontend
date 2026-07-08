@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Next.js
+web/.next/
+web/out/
+web/next-env.d.ts
+web/*.tsbuildinfo
+
+# Go
+server/bin/
+*.exe
+
+# Env
+.env
+.env.local
+
+# Misc
+.DS_Store
+*.log
+
+# Playwright CLI debug output (logs, page dumps, annotation screenshots)
+.playwright-cli/
+
+# Local screenshots / design captures
+web/*.png
+
+# Skills lockfile (local)
+skills-lock.json
+
+# Claude Code local settings
+.claude/
