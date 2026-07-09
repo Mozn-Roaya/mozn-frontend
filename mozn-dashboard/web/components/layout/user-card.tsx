@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Check, ChevronsUpDown, LogOut, Settings, User, UserCog } from "lucide-react";
 
 import {
@@ -18,12 +19,25 @@ import type { UserRole } from "@/types/shared";
 
 const ROLES: UserRole[] = ["Super Admin", "Gov Editor", "Gov Viewer"];
 
-/** Account summary pinned to the bottom of the sidebar. There is no real auth
- * here, so the identity is always the signed-out placeholder; the dropdown
- * still exposes the demo role switcher that drives the role-scoped experience. */
+/** Account summary pinned to the bottom of the sidebar. Shows the real signed-in
+ * identity from the backend session; the dropdown keeps a role-switcher that
+ * previews the role-scoped experience (the backend still enforces permissions)
+ * and a Sign out action that clears the session cookie. */
 export function UserCard() {
   const t = useT();
-  const { role, setRole } = useRole();
+  const router = useRouter();
+  const { role, setRole, name, email } = useRole();
+
+  async function handleSignOut() {
+    try {
+      await fetch("api/auth/logout", { method: "POST" });
+    } catch {
+      /* clear client state regardless */
+    }
+    toast(t("account.signedOut"));
+    router.replace("/login");
+    router.refresh();
+  }
 
   return (
     <DropdownMenu>
@@ -39,7 +53,7 @@ export function UserCard() {
             <User className="size-4" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-muted-foreground">{t("account.notSignedIn")}</p>
+            <p className="truncate text-sm font-medium text-foreground">{name || t("account.notSignedIn")}</p>
             <p className="truncate text-xs text-muted-foreground">{t("role." + role)}</p>
           </div>
           <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
@@ -55,8 +69,8 @@ export function UserCard() {
             <User className="size-4" />
           </span>
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-muted-foreground">{t("account.notSignedIn")}</p>
-            <p className="truncate text-xs text-muted-foreground">{t("role." + role)}</p>
+            <p className="truncate text-sm font-medium text-foreground">{name || t("account.notSignedIn")}</p>
+            <p className="truncate text-xs text-muted-foreground">{email || t("role." + role)}</p>
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
@@ -82,7 +96,7 @@ export function UserCard() {
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem
-          onClick={() => toast(t("account.signedOut"))}
+          onClick={handleSignOut}
           className="text-text-warning focus:bg-status-warning/10 focus:text-text-warning"
         >
           <LogOut className="size-4" />

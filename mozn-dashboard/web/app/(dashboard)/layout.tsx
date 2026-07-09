@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+
 import { LocaleProvider } from "@/components/providers/locale-provider";
 import { RoleProvider } from "@/components/providers/role-provider";
 import { AdminConfigProvider } from "@/components/providers/admin-config-provider";
@@ -6,6 +8,9 @@ import { Topbar } from "@/components/layout/topbar";
 import { RouteGuard } from "@/components/layout/route-guard";
 import { Toaster } from "@/components/ui/toaster";
 import { getServerLocale } from "@/lib/i18n-server";
+import { backendData, getCurrentUser } from "@/lib/backend";
+import { buildSessionUser } from "@/lib/mappers";
+import type { BackendRegion } from "@/lib/backend-types";
 
 export default async function DashboardLayout({
   children,
@@ -13,9 +18,28 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const locale = await getServerLocale();
+
+  // Auth gate: every dashboard screen requires a valid backend session. Any
+  // failure to resolve the signed-in user (missing/expired token, backend
+  // unreachable) bounces to the login screen, which lives outside this group.
+  const me = await getCurrentUser().catch(() => null);
+  if (!me) redirect("/login");
+
+  // Resolve the user's scoped region UUIDs to names for the identity chip.
+  // Best-effort: gov roles may lack regions.view, in which case names are
+  // omitted and the session falls back to a generic label.
+  let regionNameById = new Map<string, string>();
+  try {
+    const regions = await backendData<BackendRegion[]>("/api/regions");
+    regionNameById = new Map(regions.map((r) => [r.id, r.name]));
+  } catch {
+    /* region names are optional for the session chip */
+  }
+  const sessionUser = buildSessionUser(me, regionNameById);
+
   return (
     <LocaleProvider initialLocale={locale}>
-      <RoleProvider>
+      <RoleProvider initialUser={sessionUser}>
       <AdminConfigProvider>
       <div className="flex h-dvh overflow-hidden bg-background">
         <Sidebar />
