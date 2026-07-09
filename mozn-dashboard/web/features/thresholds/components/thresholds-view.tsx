@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { useT } from "@/components/providers/locale-provider";
 import { Card } from "@/components/ui/card";
 import type { ThresholdsPage } from "@/features/thresholds/types";
+import type { RegionOption } from "@/types/users";
 import { MetricThresholdsEditor } from "./metric-thresholds-editor";
 import { ChangeHistory } from "./change-history";
 
@@ -34,7 +35,13 @@ function Section({
   );
 }
 
-export function ThresholdsView({ page }: { page: ThresholdsPage }) {
+export function ThresholdsView({
+  page,
+  regionOptions,
+}: {
+  page: ThresholdsPage;
+  regionOptions: RegionOption[];
+}) {
   const t = useT();
 
   return (
@@ -43,7 +50,11 @@ export function ThresholdsView({ page }: { page: ThresholdsPage }) {
         label={t("thresholds.section.perMetric")}
         description={t("thresholds.section.perMetricDesc")}
       >
-        <MetricThresholdsEditor metrics={page.metrics} impact={page.impact} />
+        <MetricThresholdsEditor
+          metrics={page.metrics}
+          impact={page.impact}
+          regionOptions={regionOptions}
+        />
       </Section>
 
       <Section label={t("thresholds.history.title")}>

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import {
   CheckCheck,
   CircleCheck,
@@ -8,7 +9,8 @@ import {
   Droplets,
   Layers,
   type LucideIcon,
-  MoreHorizontal,
+  Plus,
+  RotateCcw,
   SearchX,
   ShieldCheck,
   Thermometer,
@@ -20,8 +22,27 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/common/empty-state";
 import { SearchInput } from "@/components/common/search-input";
+import { paramLabel } from "@/lib/mappers";
 import {
   Table,
   TableBody,
@@ -32,15 +53,6 @@ import {
   tableBodyRowClass,
   tableHeaderRowClass,
 } from "@/components/ui/table";
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { FacetedFilter } from "@/components/data-table/faceted-filter";
 import { SelectionBar } from "@/components/data-table/selection-bar";
 import { DensityToggle, rowPadFor, type Density } from "@/components/data-table/density-toggle";
@@ -50,6 +62,7 @@ import { usePagination } from "@/hooks/use-pagination";
 import { DotBadge, SeverityBadge } from "@/components/common/status-badges";
 import { toast } from "@/components/ui/toaster";
 import { useLocale } from "@/components/providers/locale-provider";
+import { useRole } from "@/components/providers/role-provider";
 import type {
   ManagedAlert,
   ManagedSeverity,
@@ -63,8 +76,6 @@ const TYPE_ICON: Record<string, LucideIcon> = {
   temperature: Thermometer,
   compound: Layers,
 };
-
-const SEVERITIES: ManagedSeverity[] = ["advisory", "watch", "warning", "critical"];
 
 const SEVERITY_RANK: Record<ManagedSeverity, number> = {
   critical: 0,
@@ -90,24 +101,158 @@ const STATUS_STYLE: Record<
   resolved: { variant: "normal", dot: "bg-status-normal" },
 };
 
-const STATUS_FILTERS: (ManagedStatus | "all")[] = [
-  "all",
-  "active",
-  "acknowledged",
-  "resolved",
-];
+const STATUS_FILTERS: ManagedStatus[] = ["active", "acknowledged", "resolved"];
+
+const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+
+// Parameters a manual alert can be raised on (label via paramLabel).
+const ALERT_PARAMS = [
+  "rain_rate_mm",
+  "rain_daily_mm",
+  "wind_speed_kmh",
+  "wind_gust_kmh",
+  "temp_high_c",
+  "temp_low_c",
+  "pressure_hpa",
+  "humidity",
+] as const;
+
+const CREATE_SEVERITIES = ["yellow", "orange", "red"] as const;
+/** backend severity → UI tier label key (yellow=advisory, orange=watch, red=warning). */
+const SEVERITY_TIER: Record<(typeof CREATE_SEVERITIES)[number], string> = {
+  yellow: "advisory",
+  orange: "watch",
+  red: "warning",
+};
+
+type CreateAlertDraft = {
+  stationId: string;
+  parameter: string;
+  severity: (typeof CREATE_SEVERITIES)[number];
+  value: string;
+  message: string;
+  messageAr: string;
+};
+const EMPTY_ALERT: CreateAlertDraft = {
+  stationId: "",
+  parameter: "rain_rate_mm",
+  severity: "orange",
+  value: "",
+  message: "",
+  messageAr: "",
+};
 
 type SortKey = "severity" | "type" | "trigger" | "duration" | "status";
 
-export function AlertManagementView() {
+export function AlertManagementView({ initialAlerts }: { initialAlerts: ManagedAlert[] }) {
   const { t, td } = useLocale();
-  const [alerts, setAlerts] = React.useState<ManagedAlert[]>([]);
+  const router = useRouter();
+  const { readOnly, can } = useRole();
+  // Server-rendered live data is the source of truth; after each action we
+  // router.refresh() to re-fetch rather than mutate a local copy.
+  const alerts = initialAlerts;
+
+  // Manual alert creation dialog.
+  const [createOpen, setCreateOpen] = React.useState(false);
+  const [alertDraft, setAlertDraft] = React.useState<CreateAlertDraft>(EMPTY_ALERT);
+  const [stationOpts, setStationOpts] = React.useState<{ id: string; name: string }[]>([]);
+  const [creating, setCreating] = React.useState(false);
+
+  // Load the station list (for the create dialog's station select) on first open.
+  React.useEffect(() => {
+    if (!createOpen || stationOpts.length > 0) return;
+    let alive = true;
+    fetch(`${BASE}/api/stations`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((page) => {
+        if (!alive || !page?.groups) return;
+        const rows = (page.groups as { rows: { id: string; name: string }[] }[])
+          .flatMap((g) => g.rows)
+          .map((r) => ({ id: r.id, name: r.name }));
+        setStationOpts(rows);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [createOpen, stationOpts.length]);
+
+  const submitCreate = async () => {
+    const d = alertDraft;
+    if (!d.stationId || !d.parameter || !d.message.trim() || !d.messageAr.trim()) {
+      toast(t("alertmgmt.create.incomplete"), "info");
+      return;
+    }
+    setCreating(true);
+    try {
+      const res = await fetch(`${BASE}/api/alerts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          station_id: d.stationId,
+          severity: d.severity,
+          parameter: d.parameter,
+          message: d.message.trim(),
+          message_ar: d.messageAr.trim(),
+          ...(d.value.trim() !== "" && !Number.isNaN(Number(d.value)) ? { value: Number(d.value) } : {}),
+        }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        toast(json.error ?? t("alertmgmt.create.failed"), "info");
+        return;
+      }
+      toast(t("alertmgmt.create.created"));
+      setCreateOpen(false);
+      setAlertDraft(EMPTY_ALERT);
+      router.refresh();
+    } finally {
+      setCreating(false);
+    }
+  };
   const [statuses, setStatuses] = React.useState<string[]>([]);
   const [query, setQuery] = React.useState("");
   const [sort, setSort] = React.useState<SortState<SortKey>>({ key: "severity", dir: "asc" });
   const onSort = (key: SortKey) => setSort((prev) => nextSort(prev, key));
   const [density, setDensity] = React.useState<Density>("comfortable");
   const rowPad = rowPadFor(density);
+
+  // Resolve reason dialog + in-flight guard.
+  const [resolveTarget, setResolveTarget] = React.useState<ManagedAlert | null>(null);
+  const [reason, setReason] = React.useState("");
+  const [busyId, setBusyId] = React.useState<string | null>(null);
+
+  const act = React.useCallback(
+    async (id: string, action: "resolve" | "reopen", body?: Record<string, unknown>) => {
+      setBusyId(id);
+      try {
+        const res = await fetch(`${BASE}/api/alerts/${id}/${action}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body ?? {}),
+        });
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) {
+          toast(json.error ?? t("alertmgmt.toast.failed"), "info");
+          return;
+        }
+        toast(action === "resolve" ? t("alertmgmt.toast.resolved") : t("alertmgmt.toast.reopened"));
+        router.refresh();
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [router, t],
+  );
+
+  const confirmResolve = () => {
+    if (!resolveTarget) return;
+    const id = resolveTarget.id;
+    const r = reason.trim();
+    setResolveTarget(null);
+    setReason("");
+    void act(id, "resolve", r ? { reason: r } : {});
+  };
 
   // With alerts present, zero rows means the filters excluded them all.
   const hasFilters = statuses.length > 0 || query.trim() !== "";
@@ -127,7 +272,7 @@ export function AlertManagementView() {
   // Faceted status filter options with live counts (empty selection = all).
   const statusOptions = React.useMemo(
     () =>
-      STATUS_FILTERS.filter((key) => key !== "all").map((key) => ({
+      STATUS_FILTERS.map((key) => ({
         value: key,
         label: t("alertmgmt.status." + key),
         count: alerts.filter((a) => a.status === key).length,
@@ -176,22 +321,6 @@ export function AlertManagementView() {
     setPageIndex(1);
   }
 
-  const update = (id: string, patch: Partial<ManagedAlert>) =>
-    setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)));
-
-  const setSeverity = (id: string, s: ManagedSeverity) => {
-    update(id, { severity: s });
-    toast(t("alertmgmt.toast.severity", { tier: t("severity." + s) }));
-  };
-  const acknowledge = (id: string) => {
-    update(id, { status: "acknowledged" });
-    toast(t("alertmgmt.toast.acknowledged"));
-  };
-  const resolve = (id: string) => {
-    update(id, { status: "resolved" });
-    toast(t("alertmgmt.toast.resolved"));
-  };
-
   return (
     <Card className="overflow-hidden">
       {/* Toolbar lives inside the card (matches Stations/Users/Activity). */}
@@ -214,6 +343,12 @@ export function AlertManagementView() {
             {t("alertmgmt.count", { shown: rows.length, total: alerts.length })}
           </p>
           <DensityToggle value={density} onChange={setDensity} />
+          {can("alerts.create") ? (
+            <Button size="sm" onClick={() => setCreateOpen(true)}>
+              <Plus className="size-4" />
+              {t("alertmgmt.create.newButton")}
+            </Button>
+          ) : null}
         </div>
       </div>
       {alerts.length === 0 ? (
@@ -292,7 +427,9 @@ export function AlertManagementView() {
                     </TableCell>
                     <TableCell className="align-top">
                       <p className="max-w-[380px] text-sm leading-snug text-foreground">{td(a.trigger)}</p>
-                      <p className="mt-1 text-xs tabular-nums text-muted-foreground">{readings}</p>
+                      {readings ? (
+                        <p className="mt-1 text-xs tabular-nums text-muted-foreground">{readings}</p>
+                      ) : null}
                     </TableCell>
                     <TableCell className="whitespace-nowrap align-top tabular-nums text-muted-foreground">
                       {t("alertmgmt.durationValue", { min: a.durationMin })}
@@ -304,58 +441,27 @@ export function AlertManagementView() {
                     </TableCell>
                     <TableCell className="pe-4 align-top text-end">
                       <div className="flex items-center justify-end gap-1.5">
-                        {resolved ? (
-                          <span className="inline-flex items-center gap-1 text-xs font-medium text-status-normal">
-                            <CheckCheck className="size-3.5" aria-hidden />
-                            {t("alertmgmt.status.resolved")}
-                          </span>
+                        {readOnly ? (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        ) : resolved ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => act(a.id, "reopen")}
+                            disabled={busyId === a.id}
+                          >
+                            <RotateCcw className="size-4" />
+                            {t("alertmgmt.action.reopen")}
+                          </Button>
                         ) : (
-                          <>
-                            {a.status === "active" ? (
-                              <Button size="sm" onClick={() => acknowledge(a.id)}>
-                                <CheckCheck className="size-4" />
-                                {t("alertmgmt.action.acknowledge")}
-                              </Button>
-                            ) : (
-                              <Button size="sm" onClick={() => resolve(a.id)}>
-                                <CircleCheck className="size-4" />
-                                {t("alertmgmt.action.resolve")}
-                              </Button>
-                            )}
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="size-8 text-muted-foreground"
-                                  aria-label={t("alertmgmt.action.more")}
-                                >
-                                  <MoreHorizontal className="size-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-52">
-                                <DropdownMenuLabel>{t("alertmgmt.action.severity")}</DropdownMenuLabel>
-                                {SEVERITIES.map((s) => (
-                                  <DropdownMenuCheckboxItem
-                                    key={s}
-                                    checked={a.severity === s}
-                                    onCheckedChange={() => setSeverity(a.id, s)}
-                                  >
-                                    {t("severity." + s)}
-                                  </DropdownMenuCheckboxItem>
-                                ))}
-                                {a.status === "active" ? (
-                                  <>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem onClick={() => resolve(a.id)}>
-                                      <CircleCheck className="size-4" />
-                                      {t("alertmgmt.action.resolve")}
-                                    </DropdownMenuItem>
-                                  </>
-                                ) : null}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </>
+                          <Button
+                            size="sm"
+                            onClick={() => { setReason(""); setResolveTarget(a); }}
+                            disabled={busyId === a.id}
+                          >
+                            <CircleCheck className="size-4" />
+                            {t("alertmgmt.action.resolve")}
+                          </Button>
                         )}
                       </div>
                     </TableCell>
@@ -377,6 +483,126 @@ export function AlertManagementView() {
         />
         </>
       )}
+
+      {/* Resolve — optional reason (all-clear); deactivates the alert. */}
+      <Dialog open={resolveTarget !== null} onOpenChange={(o) => { if (!o) { setResolveTarget(null); setReason(""); } }}>
+        <DialogContent>
+          <form onSubmit={(e) => { e.preventDefault(); confirmResolve(); }}>
+            <DialogHeader className="flex-row items-center gap-3.5 space-y-0">
+              <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-xl bg-status-normal/10 text-status-normal">
+                <CheckCheck className="size-5" />
+              </span>
+              <div className="flex min-w-0 flex-col gap-1">
+                <DialogTitle>{t("alertmgmt.resolve.title")}</DialogTitle>
+                <DialogDescription>{t("alertmgmt.resolve.desc")}</DialogDescription>
+              </div>
+            </DialogHeader>
+            <div className="mt-5 grid gap-2">
+              <label htmlFor="resolve-reason" className="text-sm font-medium text-foreground">
+                {t("alertmgmt.resolve.reasonLabel")}
+              </label>
+              <Textarea
+                id="resolve-reason"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder={t("alertmgmt.resolve.reasonPlaceholder")}
+                rows={3}
+                autoFocus
+              />
+            </div>
+            <DialogFooter className="mt-6 border-t border-border-subtle pt-4">
+              <DialogClose asChild>
+                <Button type="button" variant="outline">{t("common.cancel")}</Button>
+              </DialogClose>
+              <Button type="submit">
+                <CircleCheck className="size-4" />
+                {t("alertmgmt.resolve.confirm")}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create — admin-issued manual alert (created already confirmed). */}
+      <Dialog open={createOpen} onOpenChange={(o) => { setCreateOpen(o); if (!o) setAlertDraft(EMPTY_ALERT); }}>
+        <DialogContent className="max-h-[92vh] overflow-y-auto">
+          <form onSubmit={(e) => { e.preventDefault(); void submitCreate(); }}>
+            <DialogHeader className="flex-row items-center gap-3.5 space-y-0">
+              <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-subtle text-brand-foreground">
+                <Plus className="size-5" />
+              </span>
+              <div className="flex min-w-0 flex-col gap-1">
+                <DialogTitle>{t("alertmgmt.create.title")}</DialogTitle>
+                <DialogDescription>{t("alertmgmt.create.desc")}</DialogDescription>
+              </div>
+            </DialogHeader>
+            <div className="mt-5 grid gap-4">
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-foreground">
+                  {t("alertmgmt.create.station")} <span className="text-destructive">*</span>
+                </label>
+                <Select value={alertDraft.stationId} onValueChange={(v) => setAlertDraft((d) => ({ ...d, stationId: v }))}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder={t("alertmgmt.create.stationPlaceholder")} /></SelectTrigger>
+                  <SelectContent>
+                    {stationOpts.length === 0 ? (
+                      <div className="px-2 py-1.5 text-sm text-muted-foreground">{t("alertmgmt.create.noStations")}</div>
+                    ) : (
+                      stationOpts.map((s) => <SelectItem key={s.id} value={s.id}>{td(s.name)}</SelectItem>)
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-foreground">{t("alertmgmt.create.parameter")}</label>
+                  <Select value={alertDraft.parameter} onValueChange={(v) => setAlertDraft((d) => ({ ...d, parameter: v }))}>
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {ALERT_PARAMS.map((p) => <SelectItem key={p} value={p}>{paramLabel(p)}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-foreground">{t("alertmgmt.create.severity")}</label>
+                  <Select value={alertDraft.severity} onValueChange={(v) => setAlertDraft((d) => ({ ...d, severity: v as CreateAlertDraft["severity"] }))}>
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {CREATE_SEVERITIES.map((s) => <SelectItem key={s} value={s}>{t("severity." + SEVERITY_TIER[s])}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid gap-2">
+                <label htmlFor="alert-value" className="text-sm font-medium text-foreground">
+                  {t("alertmgmt.create.value")} <span className="font-normal text-muted-foreground">{t("alertmgmt.create.optional")}</span>
+                </label>
+                <Input id="alert-value" type="number" inputMode="decimal" dir="ltr" value={alertDraft.value} onChange={(e) => setAlertDraft((d) => ({ ...d, value: e.target.value }))} />
+              </div>
+              <div className="grid gap-2">
+                <label htmlFor="alert-msg" className="text-sm font-medium text-foreground">
+                  {t("alertmgmt.create.message")} <span className="text-destructive">*</span>
+                </label>
+                <Textarea id="alert-msg" rows={2} value={alertDraft.message} onChange={(e) => setAlertDraft((d) => ({ ...d, message: e.target.value }))} placeholder={t("alertmgmt.create.messagePlaceholder")} />
+              </div>
+              <div className="grid gap-2">
+                <label htmlFor="alert-msg-ar" className="text-sm font-medium text-foreground">
+                  {t("alertmgmt.create.messageAr")} <span className="text-destructive">*</span>
+                </label>
+                <Textarea id="alert-msg-ar" rows={2} dir="rtl" value={alertDraft.messageAr} onChange={(e) => setAlertDraft((d) => ({ ...d, messageAr: e.target.value }))} placeholder={t("alertmgmt.create.messageArPlaceholder")} />
+              </div>
+            </div>
+            <DialogFooter className="mt-6 border-t border-border-subtle pt-4">
+              <DialogClose asChild>
+                <Button type="button" variant="outline">{t("common.cancel")}</Button>
+              </DialogClose>
+              <Button type="submit" disabled={creating}>
+                <Plus className="size-4" />
+                {t("alertmgmt.create.submit")}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
       </Card>
   );
 }

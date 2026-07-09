@@ -1,10 +1,12 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { History, RotateCcw } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useT, useTD } from "@/components/providers/locale-provider";
+import { useRole } from "@/components/providers/role-provider";
 import { EmptyState } from "@/components/common/empty-state";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,20 +23,42 @@ import type { ThresholdsPage } from "@/features/thresholds/types";
 
 type Change = ThresholdsPage["changes"][number];
 
+const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+
 /** Audit trail of threshold edits, with per-entry revert. Sits at the foot of
  *  the screen — available but out of the primary editing flow. Revert asks for
  *  confirmation, since it silently restores earlier threshold values. */
 export function ChangeHistory({ changes }: { changes: ThresholdsPage["changes"] }) {
   const t = useT();
   const td = useTD();
+  const router = useRouter();
+  const { readOnly } = useRole();
   const [reverted, setReverted] = React.useState<Set<string>>(new Set());
   const [pending, setPending] = React.useState<Change | null>(null);
+  const [saving, setSaving] = React.useState(false);
 
-  const confirmRevert = () => {
-    if (!pending) return;
-    setReverted((p) => new Set(p).add(pending.id));
-    toast(t("thresholds.history.reverted"));
-    setPending(null);
+  const confirmRevert = async () => {
+    if (!pending || saving) return;
+    const target = pending;
+    setSaving(true);
+    try {
+      const res = await fetch(`${BASE}/api/thresholds/${target.thresholdId}/revert`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ history_id: target.id }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        toast(json.error ?? t("thresholds.history.revertFailed"), "info");
+        return;
+      }
+      setReverted((p) => new Set(p).add(target.id));
+      toast(t("thresholds.history.reverted"));
+      setPending(null);
+      router.refresh();
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (!changes || changes.length === 0) {
@@ -71,7 +95,7 @@ export function ChangeHistory({ changes }: { changes: ThresholdsPage["changes"] 
                 variant="ghost"
                 size="sm"
                 className="shrink-0 text-muted-foreground"
-                disabled={isReverted}
+                disabled={isReverted || readOnly}
                 onClick={() => setPending(c)}
               >
                 <RotateCcw className="size-4" />
@@ -106,7 +130,7 @@ export function ChangeHistory({ changes }: { changes: ThresholdsPage["changes"] 
                 {t("common.cancel")}
               </Button>
             </DialogClose>
-            <Button type="button" variant="destructive" onClick={confirmRevert}>
+            <Button type="button" variant="destructive" onClick={confirmRevert} disabled={saving}>
               <RotateCcw className="size-4" />
               {t("thresholds.history.revertConfirmCta")}
             </Button>

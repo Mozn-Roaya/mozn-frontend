@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
-import { ApiError, getStations } from "@/lib/api";
+import { ApiError, createStation, getStations } from "@/lib/api";
+import type { StationWriteInput } from "@/types/stations";
 
 /**
  * Client-facing proxy for the stations list. The palette (a client component)
@@ -16,5 +17,31 @@ export async function GET() {
   } catch (err) {
     const status = err instanceof ApiError ? err.status ?? 502 : 500;
     return NextResponse.json({ error: "Failed to load stations" }, { status });
+  }
+}
+
+/** POST /dashboard/api/stations — create a station. */
+export async function POST(req: NextRequest) {
+  let body: StationWriteInput;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+  }
+  try {
+    const result = await createStation(body);
+    if (!result.ok) {
+      return NextResponse.json(
+        { error: result.message ?? "Failed to create station" },
+        { status: result.status || 502 },
+      );
+    }
+    return NextResponse.json({ ok: true, data: result.data }, { status: 201 });
+  } catch (err) {
+    const status = err instanceof ApiError ? err.status ?? 502 : 500;
+    return NextResponse.json(
+      { error: status === 401 ? "Not authenticated" : "Failed to create station" },
+      { status },
+    );
   }
 }

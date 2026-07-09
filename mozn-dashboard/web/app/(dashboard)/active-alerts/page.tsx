@@ -1,9 +1,12 @@
+import { getActiveAlerts } from "@/lib/api";
 import { PageHeading } from "@/components/common/page-heading";
 import { AlertManagementView } from "@/features/alert-management/components/alert-management-view";
 import { getServerT } from "@/lib/i18n-server";
 
+export const dynamic = "force-dynamic";
+
 export default async function ActiveAlertsPageRoute() {
-  const { t } = await getServerT();
+  const [alerts, { t }] = await Promise.all([getActiveAlerts(), getServerT()]);
 
   return (
     <div className="space-y-6">
@@ -11,7 +14,7 @@ export default async function ActiveAlertsPageRoute() {
         title={t("page.activeAlerts.title")}
         subtitle={t("page.activeAlerts.subtitle")}
       />
-      <AlertManagementView />
+      <AlertManagementView initialAlerts={alerts} />
     </div>
   );
 }

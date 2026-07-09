@@ -372,15 +372,45 @@ function ForecastCard({ forecast, subtitle }: { forecast: ForecastDay[]; subtitl
 
 /** Full station summary card (Figma "Station Summary"). */
 export function StationSummaryCard({
-  detail,
+  detail: detailProp,
+  stationId,
   onClose,
 }: {
   detail: StationDetail;
+  /** When set (real station), the card fetches its latest reading and overlays
+   * the live weather fields onto `detail`. Omit for the create-form preview. */
+  stationId?: string;
   onClose: () => void;
 }) {
   const t = useT();
   const td = useTD();
   const { locale } = useLocale();
+
+  // Fetch the latest reading on open for a live station and merge it in. The
+  // card stays a renderer otherwise; the builders (detailFrom*) carry no weather.
+  const [weather, setWeather] = React.useState<Partial<StationDetail> | null>(null);
+  React.useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect -- data fetch on open: reset then fill from /api/readings */
+    if (!stationId || detailProp.availability !== "live") {
+      setWeather(null);
+      return;
+    }
+    setWeather(null); // clear stale weather when switching stations in the same card instance
+    let alive = true;
+    const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+    fetch(`${base}/api/readings?station_id=${encodeURIComponent(stationId)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((w) => {
+        if (alive) setWeather(w && typeof w === "object" && !("error" in w) ? w : null);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [stationId, detailProp.availability]);
+
+  const detail = weather ? { ...detailProp, ...weather } : detailProp;
   const displayName =
     locale === "ar" && detail.nameAr ? detail.nameAr : td(detail.name);
 

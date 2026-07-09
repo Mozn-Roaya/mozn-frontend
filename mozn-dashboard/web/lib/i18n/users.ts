@@ -109,6 +109,12 @@ export const users: Record<string, Entry> = {
   "users.toastActivated": { en: "{name} activated", ar: "تم تنشيط {name}" },
   "users.toastDeactivated": { en: "{name} deactivated", ar: "تم إلغاء تنشيط {name}" },
   "users.toastRemoved": { en: "Removed {name}", ar: "تمت إزالة {name}" },
+  "users.saveFailed": { en: "Action failed", ar: "فشل الإجراء" },
+  "users.noRegions": { en: "No regions available", ar: "لا توجد مناطق متاحة" },
+  "users.editIdentityHint": {
+    en: "Name, email, and password can't be changed here — update role, regions, and contact details below.",
+    ar: "لا يمكن تغيير الاسم والبريد وكلمة المرور هنا — عدّل الدور والمناطق وبيانات الاتصال أدناه.",
+  },
 
   // Users & Access tabs
   "users.tab.list": { en: "Users", ar: "المستخدمون" },
@@ -121,6 +127,12 @@ export const users: Record<string, Entry> = {
     ar: "بدّل ما يمكن لكل دور فعله. يحتفظ مدير النظام دائمًا بكامل الصلاحيات.",
   },
   "roles.saved": { en: "Permissions saved", ar: "تم حفظ الصلاحيات" },
+  "roles.saveFailed": { en: "Save failed", ar: "فشل الحفظ" },
+  "roles.noRoles": {
+    en: "No roles to show. You may not have permission to manage roles.",
+    ar: "لا توجد أدوار لعرضها. قد لا تملك صلاحية إدارة الأدوار.",
+  },
+  "roles.col.permission": { en: "Permission", ar: "الصلاحية" },
   "roles.col.capability": { en: "Capability", ar: "الصلاحية" },
   "roles.cap.viewStations": { en: "View stations", ar: "عرض المحطات" },
   "roles.cap.manageStations": { en: "Manage stations", ar: "إدارة المحطات" },

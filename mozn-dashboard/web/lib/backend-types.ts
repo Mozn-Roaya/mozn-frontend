@@ -44,10 +44,17 @@ export interface BackendLoginResult {
   token: string;
 }
 
+export interface BackendPermission {
+  id: string;
+  name: string;
+}
+
 export interface BackendRole {
   id: string;
   name: string;
   rank?: number;
+  /** Present on GET /api/roles (Preload("Permissions")). */
+  permissions?: BackendPermission[];
 }
 
 export interface BackendUser {
@@ -75,6 +82,9 @@ export interface BackendMunicipality {
   region_id: string;
   name: string;
   name_ar: string;
+  /** Per-city emergency phone numbers (free-text; "" = unset). */
+  emergency_services_phone?: string;
+  civil_defense_phone?: string;
 }
 
 export interface BackendStation {
@@ -111,7 +121,7 @@ export interface BackendAlert {
   guidance_steps_ar: string[];
   is_active: boolean;
   source: "observed" | "forecast" | "compound" | "manual";
-  status: "pending" | "confirmed" | "rejected" | "dismissed";
+  status: "pending" | "confirmed" | "rejected" | "dismissed" | "resolved";
   confirmed_by?: string;
   confirmed_at?: string | null;
   acknowledged_by?: string;
@@ -141,6 +151,22 @@ export interface BackendThreshold {
   set_by: string;
   created_at: string;
   updated_at: string;
+}
+
+/** POST /api/thresholds/preview result (services.PreviewThresholdResult). */
+export interface BackendPreviewResult {
+  lookback_hours: number;
+  evaluated_stations: number;
+  affected_station_count: number;
+  would_fire_count: number;
+  reading_count: number;
+  stations: {
+    station_id: string;
+    station_name: string;
+    peak: number;
+    breach_readings: number;
+    would_fire: boolean;
+  }[];
 }
 
 export interface BackendThresholdHistory {
@@ -179,6 +205,18 @@ export interface BackendSystemSetting {
   updated_at: string;
 }
 
+export interface BackendAlertTemplate {
+  id: string;
+  event_type: string;
+  severity: "yellow" | "orange" | "red";
+  message_en_day: string;
+  message_en_night: string;
+  message_ar_day: string;
+  message_ar_night: string;
+  guidance_steps_en: string[];
+  guidance_steps_ar: string[];
+}
+
 export interface BackendValidationRule {
   id: string;
   parameter: string;
@@ -209,6 +247,39 @@ export interface BackendDashboardStats {
   };
   recent_alerts: BackendAlert[];
   station_health: BackendStationHealth[];
+}
+
+/** GET /api/readings row (models.WeatherReading). Every measurement is optional
+ * (nil column ⇒ field absent), so treat missing as "unknown", not zero. */
+export interface BackendReading {
+  time: string;
+  station_id: string;
+  temp_c?: number;
+  heatindex_c?: number;
+  windchill_c?: number;
+  dewpoint_c?: number;
+  humidity?: number;
+  pressure_hpa?: number;
+  wind_speed_kmh?: number;
+  wind_gust_kmh?: number;
+  wind_dir?: number;
+  rain_rate_mm?: number;
+  rain_daily_mm?: number;
+  battery_ok?: boolean;
+  is_valid?: boolean;
+}
+
+/** GET /api/gov/dashboard (services.GovDashboardStats) — the region-scoped,
+ * reduced dashboard payload for gov users (no station_health / needs_attention). */
+export interface BackendGovDashboardStats {
+  regions: number;
+  total_stations: number;
+  active_stations: number;
+  offline_stations: number;
+  active_alerts: number;
+  readings_today: number;
+  data_quality: number | null;
+  recent_alerts: BackendAlert[];
 }
 
 export interface BackendStationHealth {

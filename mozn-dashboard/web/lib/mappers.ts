@@ -116,6 +116,9 @@ export interface SessionUser {
   isGov: boolean;
   readOnly: boolean;
   assignedRegion: string;
+  /** The signed-in user's real backend permissions (from /api/me) — the UI
+   * gates on these so it shows exactly what the account is allowed to do. */
+  permissions: string[];
 }
 
 /**
@@ -140,6 +143,7 @@ export function buildSessionUser(
     isGov: me.is_region_scoped,
     readOnly: !canWrite(me.permissions),
     assignedRegion,
+    permissions: me.permissions,
   };
 }
 

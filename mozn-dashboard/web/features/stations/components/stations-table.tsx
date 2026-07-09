@@ -75,6 +75,9 @@ import Link from "next/link";
 import { StationSummaryCard } from "@/components/station-detail/station-summary-card";
 import { detailFromStationRow } from "@/components/station-detail/station-detail";
 import { StationLiveView } from "./station-live-view";
+import { useRouter } from "next/navigation";
+
+const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 function exportStations(stations: StationRow[], t: TFunction) {
   downloadCsv(
@@ -117,6 +120,7 @@ export function StationsTable({ page }: { page: StationsPage }) {
   const { locale } = useLocale();
   const t = useT();
   const td = useTD();
+  const router = useRouter();
   // Gov roles get a read-only view (G2): no selection, bulk actions, or edits.
   const { isGov: readOnly } = useRole();
   const nameOf = React.useCallback(
@@ -237,6 +241,32 @@ export function StationsTable({ page }: { page: StationsPage }) {
       return next;
     });
 
+  // Set one or more stations to maintenance via the backend, then refresh.
+  const setMaintenance = async (ids: string[]) => {
+    if (ids.length === 0) return;
+    const results = await Promise.all(
+      ids.map((id) =>
+        fetch(`${BASE}/api/stations/${id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ operational_status: "maintenance" }),
+        })
+          .then(async (r) => ({
+            ok: r.ok,
+            err: r.ok ? null : ((await r.json().catch(() => ({}))) as { error?: string }).error,
+          }))
+          .catch(() => ({ ok: false, err: null as string | null })),
+      ),
+    );
+    const failed = results.filter((r) => !r.ok);
+    toast(
+      failed.length ? failed[0].err ?? t("stations.maintenanceFailed") : t("stations.maintenanceToast"),
+      failed.length ? "info" : "success",
+    );
+    setSelected(new Set());
+    router.refresh();
+  };
+
   return (
     <TooltipProvider>
       <Card className="overflow-hidden">
@@ -279,7 +309,12 @@ export function StationsTable({ page }: { page: StationsPage }) {
         {/* Contextual bulk bar */}
         {!readOnly ? (
           <SelectionBar count={selected.size} onClear={() => setSelected(new Set())}>
-            <Button size="sm" variant="outline" className="h-8">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8"
+              onClick={() => setMaintenance([...selected])}
+            >
               <Wrench className="size-3.5" />
               {t("stations.setMaintenance")}
             </Button>
@@ -426,7 +461,10 @@ export function StationsTable({ page }: { page: StationsPage }) {
                                   {t("stations.editStation")}
                                 </Link>
                               </DropdownMenuItem>
-                              <DropdownMenuItem>
+                              <DropdownMenuItem
+                                disabled={row.status === "maintenance"}
+                                onClick={() => setMaintenance([row.id])}
+                              >
                                 <Wrench className="size-4" />
                                 {t("stations.setMaintenance")}
                               </DropdownMenuItem>
@@ -474,6 +512,7 @@ export function StationsTable({ page }: { page: StationsPage }) {
               <div className="h-full overflow-y-auto p-6">
                 <StationSummaryCard
                   detail={detailFromStationRow(detailRow)}
+                  stationId={detailRow.id}
                   onClose={() => setDetailRow(null)}
                 />
               </div>

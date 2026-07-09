@@ -1,29 +1,55 @@
 import "server-only";
 
 import type { DashboardOverview, MapStation, AttentionItem, ActivityItem } from "@/types/dashboard";
-import type { StationsPage, StationRow, StationRegionGroup } from "@/types/stations";
+import type {
+  StationsPage,
+  StationRow,
+  StationRegionGroup,
+  StationDetailData,
+  StationWriteInput,
+} from "@/types/stations";
 import type { AlertInboxPage, InboxItem } from "@/types/alert-inbox";
 import type { ThresholdsPage, MetricThresholds, ThresholdTier, ScaleStop, ThresholdChange } from "@/types/thresholds";
-import type { UsersPage, UserRow } from "@/types/users";
+import type {
+  UsersPage,
+  UserRow,
+  CreateUserInput,
+  UpdateUserInput,
+  RegionOption,
+} from "@/types/users";
 import type { AlertHistoryPage, AlertHistoryRow } from "@/types/history";
 import type { ActivityLogPage, ActivityRow, ActivityDayGroup } from "@/types/activity";
 import type { SettingsPage, NotificationPref, ValidationRule } from "@/types/settings";
 import type { ActivityCategory, ThresholdMetric } from "@/types/shared";
+import type { RoleMatrix } from "@/types/roles";
 
-import { backendData, backendFetch } from "@/lib/backend";
+import { backendData, backendFetch, backendMutate, getCurrentUser, type MutationResult } from "@/lib/backend";
 import type {
   BackendAlert,
   BackendAuditLog,
   BackendDashboardStats,
+  BackendGovDashboardStats,
   BackendMunicipality,
+  BackendPermission,
+  BackendPreviewResult,
   BackendRegion,
+  BackendRole,
   BackendStation,
+  BackendStationHealth,
   BackendSystemSetting,
   BackendThreshold,
   BackendThresholdHistory,
   BackendUser,
   BackendValidationRule,
 } from "@/lib/backend-types";
+import type {
+  ManagedAlert,
+  ManagedSeverity,
+  ManagedStatus,
+} from "@/features/alert-management/types";
+import type { AlertTemplate } from "@/features/alert-templates/types";
+import type { BackendAlertTemplate, BackendReading } from "@/lib/backend-types";
+import type { StationDetail } from "@/components/station-detail/station-detail";
 import {
   duration,
   elapsed,
@@ -98,10 +124,13 @@ function userNameMap(users: BackendUser[]): Map<string, string> {
 // ── Dashboard overview (A1) ─────────────────────────────────────────────────
 
 export async function getDashboardOverview(): Promise<DashboardOverview> {
-  // Primary source — failure here should surface as a page error.
-  const stats = await backendData<BackendDashboardStats>("/api/dashboard/stats");
+  // Permission-based source selection: full admin stats for accounts holding
+  // dashboard.view; the leaner region-scoped /api/gov/dashboard otherwise (so a
+  // gov account that lacks dashboard.view isn't 403'd on the overview).
+  const me = await getCurrentUser();
+  const useGov = !me.permissions.includes("dashboard.view") && me.permissions.includes("gov.dashboard");
 
-  // Supplementary context (best-effort).
+  // Supplementary context (best-effort; region-scoped server-side for gov users).
   const [regions, municipalities, stations, users, activeAlerts, audit] = await Promise.all([
     loadRegions(),
     loadMunicipalities(),
@@ -117,12 +146,64 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
 
   const maintenanceCount = stations.filter((s) => s.operational_status === "maintenance").length;
 
+  // Normalize the primary stats into one shape the builders below consume. The
+  // gov endpoint omits station_health + needs_attention, so reconstruct those
+  // from the (already region-scoped) stations + active alerts loaded above.
+  interface NormStats {
+    totalStations: number;
+    activeStations: number;
+    offlineStations: number;
+    activeAlerts: number;
+    anomalyStations: number;
+    unackAlerts: number;
+    offlineAttention: number;
+    health: BackendStationHealth[];
+  }
+  let norm: NormStats;
+  if (useGov) {
+    const g = await backendData<BackendGovDashboardStats>("/api/gov/dashboard");
+    const health: BackendStationHealth[] = stations.map((s) => ({
+      id: s.id,
+      name: s.name,
+      is_active: s.is_active,
+      last_seen_at: s.last_seen_at ?? null,
+      status: stationOpStatus(s),
+      data_status: s.data_status,
+      silent_sensors: s.silent_sensors ?? [],
+      latitude: s.latitude,
+      longitude: s.longitude,
+    }));
+    norm = {
+      totalStations: g.total_stations,
+      activeStations: g.active_stations,
+      offlineStations: g.offline_stations,
+      activeAlerts: g.active_alerts,
+      anomalyStations: stations.filter((s) => s.status === "anomaly").length,
+      unackAlerts: activeAlerts.filter((a) => !a.acknowledged_at && a.status === "pending").length,
+      offlineAttention: g.offline_stations,
+      health,
+    };
+  } else {
+    // Failure here should surface as a page error (primary admin source).
+    const stats = await backendData<BackendDashboardStats>("/api/dashboard/stats");
+    norm = {
+      totalStations: stats.total_stations,
+      activeStations: stats.active_stations,
+      offlineStations: stats.offline_stations,
+      activeAlerts: stats.active_alerts,
+      anomalyStations: stats.needs_attention.anomaly_stations,
+      unackAlerts: stats.needs_attention.unacknowledged_alerts,
+      offlineAttention: stats.needs_attention.offline_stations,
+      health: stats.station_health,
+    };
+  }
+
   const stats_ = [
-    { id: "online", label: "Stations online", value: stats.active_stations, total: stats.total_stations, tone: "online" as const },
-    { id: "offline", label: "Offline", value: stats.offline_stations, tone: "offline" as const },
+    { id: "online", label: "Stations online", value: norm.activeStations, total: norm.totalStations, tone: "online" as const },
+    { id: "offline", label: "Offline", value: norm.offlineStations, tone: "offline" as const },
     { id: "maintenance", label: "Maintenance", value: maintenanceCount, tone: "maintenance" as const },
-    { id: "anomaly", label: "Anomaly", value: stats.needs_attention.anomaly_stations, tone: "anomaly" as const },
-    { id: "alerts", label: "Active alerts", value: stats.active_alerts, tone: "alert" as const },
+    { id: "anomaly", label: "Anomaly", value: norm.anomalyStations, tone: "anomaly" as const },
+    { id: "alerts", label: "Active alerts", value: norm.activeAlerts, tone: "alert" as const },
   ];
 
   // Per-station active-alert tallies for the map pins.
@@ -135,7 +216,7 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
     alertCounts.set(a.station_id, c);
   }
 
-  const mapStations: MapStation[] = stats.station_health.map((sh) => {
+  const mapStations: MapStation[] = norm.health.map((sh) => {
     const counts = alertCounts.get(sh.id);
     return {
       id: sh.id,
@@ -161,7 +242,7 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
       severity: a.severity === "yellow" ? "advisory" : "warning",
     });
   }
-  for (const sh of stats.station_health.filter((s) => healthStatusToMapStatus(s.status, s.is_active, s.last_seen_at) === "offline").slice(0, 4)) {
+  for (const sh of norm.health.filter((s) => healthStatusToMapStatus(s.status, s.is_active, s.last_seen_at) === "offline").slice(0, 4)) {
     attention.push({
       id: `offline-${sh.id}`,
       title: `${sh.name} offline`,
@@ -203,21 +284,18 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
   return {
     header: {
       title: "System Overview",
-      statusLabel: `${stats.active_stations}/${stats.total_stations} stations reporting`,
+      statusLabel: `${norm.activeStations}/${norm.totalStations} stations reporting`,
       live: true,
     },
     stats: stats_,
     map: {
       title: "Station Health Map",
-      subtitle: `Live status across ${stats.total_stations} stations`,
+      subtitle: `Live status across ${norm.totalStations} stations`,
       coverageNote: "",
       stations: mapStations,
     },
     needsAttention: {
-      openCount:
-        stats.needs_attention.unacknowledged_alerts +
-        stats.needs_attention.offline_stations +
-        stats.needs_attention.anomaly_stations,
+      openCount: norm.unackAlerts + norm.offlineAttention + norm.anomalyStations,
       items: attention,
     },
     recentActivity,
@@ -237,6 +315,7 @@ export async function getStations(): Promise<StationsPage> {
     name: s.name,
     nameAr: s.name_ar,
     region: muniRegion.get(s.municipality_id) ?? "—",
+    municipalityId: s.municipality_id,
     status: stationOpStatus(s),
     reading: "", // admin list carries no latest-reading metric (honest-neutral)
     signal: 0, // WU feed exposes no signal strength — neutral
@@ -320,6 +399,7 @@ export async function getAlertInbox(): Promise<AlertInboxPage> {
         ? { label: "WINDOW", value: new Date(a.starts_at).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" }) }
         : { label: "ISSUED", value: relativeTime(a.issued_at) },
       recommended: "", // backend supplies no recommended-action text (honest-neutral)
+      acknowledged: a.acknowledged_at != null,
     };
   });
 
@@ -369,6 +449,12 @@ export async function getThresholds(): Promise<ThresholdsPage> {
     const tiers: ThresholdTier[] = sorted.map((t) => {
       const tier = severityToTier(t.severity);
       return {
+        id: t.id,
+        parameter: t.parameter,
+        severity: t.severity,
+        appliesTo: t.applies_to,
+        isActive: t.is_active,
+        sustainDurationMinutes: t.sustain_duration_minutes ?? null,
         name: tier.charAt(0).toUpperCase() + tier.slice(1),
         mode: t.severity === "red" ? "manual" : "auto",
         description: paramLabel(t.parameter),
@@ -386,6 +472,7 @@ export async function getThresholds(): Promise<ThresholdsPage> {
       label: METRIC_LABEL[metric],
       unit,
       perStationOverrides: false, // backend thresholds are region-level only
+      regionId: sorted[0]?.region_id ?? "",
       tiers,
       scale,
     };
@@ -401,6 +488,7 @@ export async function getThresholds(): Promise<ThresholdsPage> {
     const verb = h.action === "created" ? "added" : h.action === "deleted" ? "removed" : h.action === "reverted" ? "reverted" : "";
     return {
       id: h.id,
+      thresholdId: h.threshold_id,
       change: `${paramLabel(h.parameter)} · ${tier.charAt(0).toUpperCase() + tier.slice(1)} ${verb ? verb + " " : ""}${valueText}`.trim(),
       by: (h.changed_by && users_.get(h.changed_by)) || "—",
       when: relativeTime(h.created_at),
@@ -416,7 +504,8 @@ export async function getUsers(): Promise<UsersPage> {
   const users = await backendData<BackendUser[]>("/api/users?page_size=500");
 
   const rows: UserRow[] = users.map((u) => {
-    const role = mapBackendRole(u.role?.name ?? "viewer");
+    const roleName = u.role?.name ?? "viewer";
+    const role = mapBackendRole(roleName);
     const regionNames = (u.regions ?? []).map((r) => r.name);
     return {
       id: u.id,
@@ -424,7 +513,9 @@ export async function getUsers(): Promise<UsersPage> {
       email: u.email,
       initials: initials(u.name),
       role,
+      roleName,
       regions: role === "Super Admin" ? "All regions" : regionNames.join(", ") || "—",
+      regionIds: (u.regions ?? []).map((r) => r.id),
       lastActive: relativeTime(u.last_active_at),
       active: u.is_active,
       ...(u.phone ? { phone: u.phone } : {}),
@@ -450,8 +541,13 @@ export async function getUsers(): Promise<UsersPage> {
 
 // ── Alert history (A5.0) ──────────────────────────────────────────────────────
 
-export async function getAlertHistory(): Promise<AlertHistoryPage> {
-  const alerts = await backendData<BackendAlert[]>("/api/alerts?page_size=200");
+const HISTORY_RANGE_HOURS: Record<string, number> = { "24h": 24, "7d": 168, "30d": 720, "90d": 2160 };
+
+export async function getAlertHistory(params?: { range?: string }): Promise<AlertHistoryPage> {
+  const hours = HISTORY_RANGE_HOURS[params?.range ?? "7d"] ?? 168;
+  const from = new Date(Date.now() - hours * 3_600_000).toISOString();
+  const qs = new URLSearchParams({ page_size: "500", from });
+  const alerts = await backendData<BackendAlert[]>(`/api/alerts?${qs.toString()}`);
   const [regions, municipalities, stations] = await Promise.all([
     loadRegions(),
     loadMunicipalities(),
@@ -594,7 +690,18 @@ export async function getSettings(): Promise<SettingsPage> {
       r.max_rate_of_change != null
         ? `${r.max_rate_of_change}${u ? " " + u : ""}${r.rate_interval_min ? ` / ${r.rate_interval_min} min` : ""}`
         : "—";
-    return { metric: paramLabel(r.parameter), validRange, maxRate, active: true };
+    return {
+      id: r.id,
+      parameter: r.parameter,
+      metric: paramLabel(r.parameter),
+      validRange,
+      maxRate,
+      active: true,
+      validRangeMin: r.valid_range_min ?? null,
+      validRangeMax: r.valid_range_max ?? null,
+      maxRateOfChange: r.max_rate_of_change ?? null,
+      rateIntervalMin: r.rate_interval_min ?? null,
+    };
   });
 
   return {
@@ -603,4 +710,471 @@ export async function getSettings(): Promise<SettingsPage> {
       "Readings outside these bounds are flagged and withheld from the public map.",
     validationRules,
   };
+}
+
+// ── Active alerts (A3.2) ────────────────────────────────────────────────────
+// Live active alerts + recently-resolved ones, shaped for the management screen.
+// Resolved rows are kept so an operator can Reopen them; rejected/dismissed are
+// excluded (they aren't "active alert" lifecycle states the screen manages).
+
+export async function getActiveAlerts(): Promise<ManagedAlert[]> {
+  const alerts = await backendData<BackendAlert[]>("/api/alerts?page_size=200");
+  const [regions, municipalities, stations] = await Promise.all([
+    loadRegions(),
+    loadMunicipalities(),
+    loadStationsAll(),
+  ]);
+  const lookup = stationLookup(stations, municipalityRegionName(municipalities, regions));
+
+  const now = Date.now();
+  return alerts
+    .filter((a) => a.is_active || a.status === "resolved")
+    .map((a) => {
+      const st = a.station_id ? lookup.get(a.station_id) : undefined;
+      const metric = paramToMetric(a.parameter);
+      const status: ManagedStatus = !a.is_active
+        ? "resolved"
+        : a.acknowledged_at
+          ? "acknowledged"
+          : "active";
+      return {
+        id: a.id,
+        typeKey: a.source === "compound" ? "compound" : (metric ?? "compound"),
+        severity: historySeverity(a) as ManagedSeverity,
+        status,
+        region: st?.region ?? "—",
+        stations: st?.name ? [st.name] : [],
+        trigger: a.message,
+        readings: metric ? [{ metric, value: `${a.value}${paramUnit(a.parameter)}` }] : [],
+        durationMin: Math.max(0, Math.round((now - new Date(a.issued_at).getTime()) / 60_000)),
+      };
+    });
+}
+
+// ── Alert action writers (thin backend proxies for route handlers) ──────────
+
+export function acknowledgeAlert(id: string, note?: string): Promise<MutationResult<BackendAlert>> {
+  return backendMutate<BackendAlert>(`/api/alerts/${id}/acknowledge`, {
+    method: "POST",
+    body: JSON.stringify(note ? { confirm_note: note } : {}),
+  });
+}
+
+export function unacknowledgeAlert(id: string): Promise<MutationResult<BackendAlert>> {
+  return backendMutate<BackendAlert>(`/api/alerts/${id}/unacknowledge`, { method: "POST", body: "{}" });
+}
+
+export function resolveAlert(id: string, reason?: string): Promise<MutationResult<BackendAlert>> {
+  return backendMutate<BackendAlert>(`/api/alerts/${id}/resolve`, {
+    method: "POST",
+    body: JSON.stringify(reason ? { reason } : {}),
+  });
+}
+
+export function reopenAlert(id: string): Promise<MutationResult<BackendAlert>> {
+  return backendMutate<BackendAlert>(`/api/alerts/${id}/reopen`, { method: "POST", body: "{}" });
+}
+
+// ── Role → permission matrix (A4.2) ─────────────────────────────────────────
+
+// Turn a backend identifier (dot/underscore separated) into Title Case words,
+// e.g. "audit_log" → "Audit Log", "compound_rules.view" → "Compound Rules View".
+function humanizeWords(s: string): string {
+  return s
+    .split(/[._\s]+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+function humanizeRoleName(name: string): string {
+  return humanizeWords(name);
+}
+
+/** GET /api/roles (with permissions) + GET /api/permissions for the matrix. */
+export async function getRoleMatrix(): Promise<RoleMatrix> {
+  const [roles, permissions] = await Promise.all([
+    backendData<BackendRole[]>("/api/roles"),
+    backendData<BackendPermission[]>("/api/permissions"),
+  ]);
+  return {
+    roles: [...roles]
+      .sort((a, b) => (b.rank ?? 0) - (a.rank ?? 0))
+      .map((r) => ({
+        id: r.id,
+        name: r.name,
+        label: humanizeRoleName(r.name),
+        rank: r.rank ?? 0,
+        permissionIds: (r.permissions ?? []).map((p) => p.id),
+      })),
+    permissions: permissions.map((p) => {
+      const [group, ...rest] = p.name.split(".");
+      const action = rest.join(".");
+      return {
+        id: p.id,
+        name: p.name,
+        group,
+        action,
+        groupLabel: humanizeWords(group),
+        label: humanizeWords(action) || humanizeWords(p.name),
+      };
+    }),
+  };
+}
+
+export function updateRolePermissions(
+  roleId: string,
+  permissionIds: string[],
+): Promise<MutationResult<BackendRole>> {
+  return backendMutate<BackendRole>(`/api/roles/${roleId}/permissions`, {
+    method: "PUT",
+    body: JSON.stringify({ permission_ids: permissionIds }),
+  });
+}
+
+// ── Municipality emergency contacts (A2 station form) ───────────────────────
+
+export interface MunicipalityOption {
+  id: string;
+  name: string;
+  nameAr: string;
+  region: string; // region name (for filtering the picker by the form's region)
+  emergencyServices: string;
+  civilDefense: string;
+}
+
+export async function getMunicipalityOptions(): Promise<MunicipalityOption[]> {
+  const [municipalities, regions] = await Promise.all([
+    backendData<BackendMunicipality[]>("/api/municipalities?page_size=1000"),
+    loadRegions(),
+  ]);
+  const regionById = new Map(regions.map((r) => [r.id, r.name]));
+  return municipalities.map((m) => ({
+    id: m.id,
+    name: m.name,
+    nameAr: m.name_ar,
+    region: regionById.get(m.region_id) ?? "—",
+    emergencyServices: m.emergency_services_phone ?? "",
+    civilDefense: m.civil_defense_phone ?? "",
+  }));
+}
+
+export function updateMunicipalityContacts(
+  id: string,
+  contacts: { emergencyServices: string; civilDefense: string },
+): Promise<MutationResult<BackendMunicipality>> {
+  return backendMutate<BackendMunicipality>(`/api/municipalities/${id}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      emergency_services_phone: contacts.emergencyServices,
+      civil_defense_phone: contacts.civilDefense,
+    }),
+  });
+}
+
+// ── Regions (for user region-assignment picker) ─────────────────────────────
+
+export async function getRegionOptions(): Promise<RegionOption[]> {
+  const regions = await loadRegions();
+  return regions.map((r) => ({ id: r.id, name: r.name }));
+}
+
+// ── Stations CRUD (A2.1) ────────────────────────────────────────────────────
+
+/** Full station detail for the edit form — the list DTO omits coords/sensors, so
+ * a naive edit would clobber them; the form prefills from this instead. */
+export async function getStation(id: string): Promise<StationDetailData> {
+  const s = await backendData<BackendStation>(`/api/stations/${id}`);
+  return {
+    id: s.id,
+    municipalityId: s.municipality_id,
+    name: s.name,
+    nameAr: s.name_ar,
+    stationType: s.station_type,
+    latitude: s.latitude,
+    longitude: s.longitude,
+    elevation: s.elevation,
+    wuStationId: s.wu_station_id ?? null,
+    sensors: s.sensors ?? [],
+    reportIntervalMinutes: s.report_interval_minutes ?? null,
+    operationalStatus: s.operational_status,
+    isActive: s.is_active,
+  };
+}
+
+export function createStation(input: StationWriteInput): Promise<MutationResult<BackendStation>> {
+  return backendMutate<BackendStation>("/api/stations", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateStation(
+  id: string,
+  input: StationWriteInput,
+): Promise<MutationResult<BackendStation>> {
+  return backendMutate<BackendStation>(`/api/stations/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteStation(id: string): Promise<MutationResult<null>> {
+  return backendMutate<null>(`/api/stations/${id}`, { method: "DELETE" });
+}
+
+// ── Users CRUD (A4.0/A4.1) ──────────────────────────────────────────────────
+
+export function createUser(input: CreateUserInput): Promise<MutationResult<BackendUser>> {
+  return backendMutate<BackendUser>("/api/users", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateUser(
+  id: string,
+  input: UpdateUserInput,
+): Promise<MutationResult<BackendUser>> {
+  return backendMutate<BackendUser>(`/api/users/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteUser(id: string): Promise<MutationResult<null>> {
+  return backendMutate<null>(`/api/users/${id}`, { method: "DELETE" });
+}
+
+// ── Threshold writers (A3.0) ────────────────────────────────────────────────
+
+/** PUT /api/thresholds/:id — parameter/severity/region are immutable (unique key);
+ * only value/is_active/sustain/applies_to are editable. */
+export function updateThreshold(
+  id: string,
+  input: { value?: number; is_active?: boolean; sustain_duration_minutes?: number | null; applies_to?: string },
+): Promise<MutationResult<BackendThreshold>> {
+  return backendMutate<BackendThreshold>(`/api/thresholds/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export function revertThreshold(id: string, historyId: string): Promise<MutationResult<BackendThreshold>> {
+  return backendMutate<BackendThreshold>(`/api/thresholds/${id}/revert`, {
+    method: "POST",
+    body: JSON.stringify({ history_id: historyId }),
+  });
+}
+
+export interface CreateThresholdInput {
+  region_id: string;
+  parameter: string;
+  severity: "yellow" | "orange" | "red";
+  applies_to?: "observed" | "forecast" | "both";
+  value: number;
+  sustain_duration_minutes?: number | null;
+}
+
+export function createThreshold(input: CreateThresholdInput): Promise<MutationResult<BackendThreshold>> {
+  return backendMutate<BackendThreshold>("/api/thresholds", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteThreshold(id: string): Promise<MutationResult<null>> {
+  return backendMutate<null>(`/api/thresholds/${id}`, { method: "DELETE" });
+}
+
+export function previewThreshold(input: {
+  region_id: string;
+  parameter: string;
+  value: number;
+  sustain_duration_minutes?: number | null;
+  lookback_hours?: number;
+}): Promise<MutationResult<BackendPreviewResult>> {
+  return backendMutate<BackendPreviewResult>("/api/thresholds/preview", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+// ── More alert actions (inbox dismiss → reject, escalate) ───────────────────
+
+export function rejectAlert(id: string, note?: string): Promise<MutationResult<BackendAlert>> {
+  return backendMutate<BackendAlert>(`/api/alerts/${id}/reject`, {
+    method: "POST",
+    body: JSON.stringify(note ? { confirm_note: note } : {}),
+  });
+}
+
+export function escalateAlert(id: string, urgency: string): Promise<MutationResult<BackendAlert>> {
+  return backendMutate<BackendAlert>(`/api/alerts/${id}/escalate`, {
+    method: "POST",
+    body: JSON.stringify({ urgency }),
+  });
+}
+
+export interface CreateAlertInput {
+  station_id: string;
+  severity: "yellow" | "orange" | "red";
+  parameter: string;
+  message: string;
+  message_ar: string;
+  value?: number;
+  level?: "national" | "regional" | "city";
+  urgency?: "routine" | "urgent" | "critical";
+}
+
+/** POST /api/alerts — admin-issued manual alert (created already confirmed;
+ * guidance falls back to the seeded template when omitted). */
+export function createAlert(input: CreateAlertInput): Promise<MutationResult<BackendAlert>> {
+  return backendMutate<BackendAlert>("/api/alerts", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+// ── Alert templates (A3.1) ──────────────────────────────────────────────────
+
+/** Map a backend event_type to the FE i18n/icon key (camelCase). Unknown values
+ * fall through unchanged (UI falls back to a generic icon + the raw label). */
+const TEMPLATE_EVENT_KEY: Record<string, string> = {
+  flash_flood: "flashFlood",
+  heavy_rain: "heavyRain",
+  high_wind: "highWind",
+  heatwave: "heatwave",
+  coastal_surge: "coastalSurge",
+  temp_drop: "tempDrop",
+};
+
+export async function getTemplates(): Promise<AlertTemplate[]> {
+  const rows = await backendData<BackendAlertTemplate[]>("/api/templates?page_size=200");
+  return rows.map((r) => {
+    const en = r.guidance_steps_en ?? [];
+    const ar = r.guidance_steps_ar ?? [];
+    const stepCount = Math.max(en.length, ar.length);
+    const steps = Array.from({ length: stepCount }, (_, i) => ({ en: en[i] ?? "", ar: ar[i] ?? "" }));
+    return {
+      id: r.id,
+      eventType: r.event_type,
+      eventKey: TEMPLATE_EVENT_KEY[r.event_type] ?? r.event_type,
+      severity: r.severity,
+      versions: {
+        enDay: r.message_en_day,
+        enNight: r.message_en_night,
+        arDay: r.message_ar_day,
+        arNight: r.message_ar_night,
+      },
+      steps,
+    };
+  });
+}
+
+export interface TemplateWriteInput {
+  message_en_day: string;
+  message_en_night: string;
+  message_ar_day: string;
+  message_ar_night: string;
+  guidance_steps_en: string[];
+  guidance_steps_ar: string[];
+}
+
+export interface CreateTemplateInput extends TemplateWriteInput {
+  event_type: string;
+  severity: "yellow" | "orange" | "red";
+}
+
+export function createTemplate(input: CreateTemplateInput): Promise<MutationResult<BackendAlertTemplate>> {
+  return backendMutate<BackendAlertTemplate>("/api/templates", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateTemplate(
+  id: string,
+  input: Partial<TemplateWriteInput>,
+): Promise<MutationResult<BackendAlertTemplate>> {
+  return backendMutate<BackendAlertTemplate>(`/api/templates/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteTemplate(id: string): Promise<MutationResult<null>> {
+  return backendMutate<null>(`/api/templates/${id}`, { method: "DELETE" });
+}
+
+// ── Station live telemetry (B7) ─────────────────────────────────────────────
+
+const COMPASS_16 = [
+  "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+  "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW",
+];
+function compass(deg: number): string {
+  return COMPASS_16[Math.round(((deg % 360) / 22.5)) % 16];
+}
+
+/**
+ * Latest reading for a station, shaped as the station-summary card's weather
+ * fields. Uses the authed, region-scoped, live /api/readings (page_size=1 ⇒ the
+ * newest row). Every measurement is optional server-side, so we only set the
+ * fields that are present. Returns null when the station has no readings.
+ */
+export async function getLatestReading(stationId: string): Promise<Partial<StationDetail> | null> {
+  const rows = await backendData<BackendReading[]>(
+    `/api/readings?station_id=${encodeURIComponent(stationId)}&page_size=1`,
+  );
+  const r = rows[0];
+  if (!r) return null;
+
+  const out: Partial<StationDetail> = { updated: relativeTime(r.time) };
+  if (r.temp_c != null) out.temp = Math.round(r.temp_c);
+  const feels = r.heatindex_c ?? r.windchill_c ?? r.temp_c;
+  if (feels != null) out.feelsLike = Math.round(feels);
+  if (r.rain_rate_mm != null) {
+    out.rainfall = {
+      value: String(r.rain_rate_mm),
+      unit: "mm/hr",
+      note: r.rain_daily_mm != null ? `${r.rain_daily_mm} mm today` : "",
+    };
+  }
+  if (r.wind_speed_kmh != null) {
+    out.wind = {
+      value: String(Math.round(r.wind_speed_kmh)),
+      unit: "km/h",
+      note: r.wind_gust_kmh != null ? `Gusts ${Math.round(r.wind_gust_kmh)} km/h` : "",
+      direction: r.wind_dir != null ? compass(r.wind_dir) : "",
+    };
+  }
+  if (r.humidity != null) out.humidity = { value: String(Math.round(r.humidity)), unit: "%", note: "" };
+  if (r.pressure_hpa != null) out.pressure = { value: String(Math.round(r.pressure_hpa)), unit: "hPa", note: "" };
+  return out;
+}
+
+// ── Settings + validation rules (A6) ────────────────────────────────────────
+
+/** PUT /api/settings — single key/value upsert (no bulk endpoint; call per key). */
+export function upsertSetting(key: string, value: string): Promise<MutationResult<BackendSystemSetting>> {
+  return backendMutate<BackendSystemSetting>("/api/settings", {
+    method: "PUT",
+    body: JSON.stringify({ key, value }),
+  });
+}
+
+export function updateValidationRule(
+  id: string,
+  input: {
+    valid_range_min?: number | null;
+    valid_range_max?: number | null;
+    max_rate_of_change?: number | null;
+    rate_interval_min?: number | null;
+  },
+): Promise<MutationResult<BackendValidationRule>> {
+  return backendMutate<BackendValidationRule>(`/api/validation-rules/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import {
   Check,
   CloudRain,
@@ -12,7 +13,6 @@ import {
   type LucideIcon,
   MoreHorizontal,
   Pencil,
-  PencilLine,
   PhoneCall,
   Plus,
   Save,
@@ -47,14 +47,27 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "@/components/ui/toaster";
 import { useLocale } from "@/components/providers/locale-provider";
 import { useAdminConfig } from "@/components/providers/admin-config-provider";
+import { useRole } from "@/components/providers/role-provider";
+import { SeverityBadge } from "@/components/common/status-badges";
 import type {
   AlertTemplate,
   TemplateVersionKey,
 } from "@/features/alert-templates/types";
-import type { LocalizedStep } from "@/types/shared";
+import type { AlertSeverity, LocalizedStep } from "@/types/shared";
+
+// Writes go through the Next route handlers, which the backend serves under the
+// dashboard base path in production.
+const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 const EVENT_ICON: Record<string, LucideIcon> = {
   flashFlood: Waves,
@@ -65,8 +78,32 @@ const EVENT_ICON: Record<string, LucideIcon> = {
   tempDrop: ThermometerSnowflake,
 };
 
+// Backend severity tiers map onto the shared alert-severity chip so templates
+// reuse the same visual language as the rest of the app.
+const SEVERITY_TIER: Record<AlertTemplate["severity"], AlertSeverity> = {
+  yellow: "advisory",
+  orange: "watch",
+  red: "warning",
+};
+
 const VERSION_KEYS: TemplateVersionKey[] = ["enDay", "enNight", "arDay", "arNight"];
 const isArabicVersion = (k: TemplateVersionKey) => k === "arDay" || k === "arNight";
+
+// Create-dialog option lists. `value` is the snake_case backend event_type
+// (getTemplates maps it back to the camelCase eventKey); the labels reuse the
+// same templates.event.* copy the rest of the screen shows.
+const EVENT_OPTIONS: { value: string; labelKey: string }[] = [
+  { value: "flash_flood", labelKey: "templates.event.flashFlood" },
+  { value: "heavy_rain", labelKey: "templates.event.heavyRain" },
+  { value: "high_wind", labelKey: "templates.event.highWind" },
+  { value: "heatwave", labelKey: "templates.event.heatwave" },
+  { value: "coastal_surge", labelKey: "templates.event.coastalSurge" },
+  { value: "temp_drop", labelKey: "templates.event.tempDrop" },
+  { value: "custom", labelKey: "templates.event.custom" },
+];
+// Backend severity tiers, in ascending order — labelled via the shared
+// severity.* copy through SEVERITY_TIER (yellow→advisory, etc).
+const SEVERITY_OPTIONS: AlertTemplate["severity"][] = ["yellow", "orange", "red"];
 
 /**
  * Structural placeholder used only when there are no templates to select, so
@@ -77,6 +114,8 @@ const isArabicVersion = (k: TemplateVersionKey) => k === "arDay" || k === "arNig
 const EMPTY_TEMPLATE: AlertTemplate = {
   id: "",
   eventKey: "",
+  eventType: "",
+  severity: "yellow",
   versions: { enDay: "", enNight: "", arDay: "", arNight: "" },
   steps: [],
 };
@@ -105,21 +144,45 @@ function VersionMeter({ done }: { done: number }) {
   );
 }
 
-export function AlertTemplatesView() {
-  const { t, locale } = useLocale();
-  const { templateSteps, setTemplateSteps, contactsForCity } = useAdminConfig();
+export function AlertTemplatesView({
+  initialTemplates,
+}: {
+  initialTemplates: AlertTemplate[];
+}) {
+  const { t } = useLocale();
+  const { contactsForCity } = useAdminConfig();
+  const router = useRouter();
+  const { readOnly, can } = useRole();
+  // Creating is gated on the real backend permission (not the coarse readOnly
+  // flag): "whoever logs in sees exactly what they can do".
+  const canCreate = can("templates.create");
   // The preview mirrors the citizen alert card, which shows national emergency
   // numbers; templates aren't city-scoped, so fall back to the national default.
   const contacts = contactsForCity();
-  const [templates, setTemplates] = React.useState<AlertTemplate[]>([]);
+
+  // Server data is the source of truth; after each write we router.refresh(),
+  // which re-runs the page and hands us fresh rows via `initialTemplates`.
+  const [templates, setTemplates] = React.useState<AlertTemplate[]>(initialTemplates);
   const [activeId, setActiveId] = React.useState("");
+
+  // Reconcile the freshly-fetched rows in during render (the pattern used
+  // elsewhere in this file). If the active template was deleted upstream, drop
+  // the stale id so the editor falls back to the first remaining template.
+  const [loadedFrom, setLoadedFrom] = React.useState(initialTemplates);
+  if (loadedFrom !== initialTemplates) {
+    setLoadedFrom(initialTemplates);
+    setTemplates(initialTemplates);
+    if (activeId && !initialTemplates.some((tp) => tp.id === activeId)) {
+      setActiveId("");
+    }
+  }
+
   const hasTemplates = templates.length > 0;
   const active =
     templates.find((tp) => tp.id === activeId) ?? templates[0] ?? EMPTY_TEMPLATE;
 
-  // Event names are keyed under templates.event.*; user-created templates use a
-  // unique "custom-N" key with no dictionary entry, so fall back to the generic
-  // "New template" label for those.
+  // Event names are keyed under templates.event.*; unknown backend event types
+  // fall back to the generic "New template" label.
   const eventLabel = React.useCallback(
     (key: string) =>
       dict["templates.event." + key]
@@ -128,43 +191,14 @@ export function AlertTemplatesView() {
     [t],
   );
 
-  // The event label in a specific language (not the active locale) — used to
-  // seed each side of the bilingual rename dialog with a sensible default.
-  const eventLabelIn = React.useCallback(
-    (key: string, lang: "en" | "ar") =>
-      (dict["templates.event." + key] ?? dict["templates.event.custom"])[lang],
-    [],
-  );
-
-  // A template's display name is its custom name for the active locale (falling
-  // back to the other language, then the event label) — so both seeded and
-  // user-created templates read correctly in either language.
+  // A template's display name is its event label plus its severity tier, so the
+  // same event at multiple severities reads distinctly everywhere the name is
+  // shown as plain text (list rows, delete dialog, aria labels).
   const templateName = React.useCallback(
-    (tp: AlertTemplate) => {
-      const name =
-        tp.name?.[locale]?.trim() || tp.name?.[locale === "en" ? "ar" : "en"]?.trim();
-      return name || eventLabel(tp.eventKey);
-    },
-    [eventLabel, locale],
+    (tp: AlertTemplate) =>
+      `${eventLabel(tp.eventKey)} · ${t("severity." + SEVERITY_TIER[tp.severity])}`,
+    [eventLabel, t],
   );
-
-  // Append a blank template and open it for editing. A unique eventKey keeps each
-  // new template's saved response steps isolated in the shared store.
-  const nextCustom = React.useRef(1);
-  const addTemplate = () => {
-    const n = nextCustom.current++;
-    const id = `tpl-custom-${n}`;
-    setTemplates((prev) => [
-      ...prev,
-      {
-        id,
-        eventKey: `custom-${n}`,
-        versions: { enDay: "", enNight: "", arDay: "", arNight: "" },
-        steps: [],
-      },
-    ]);
-    setActiveId(id);
-  };
 
   // Open a template for editing. Selecting a row already swaps the (always
   // visible) editor, so a plain setActiveId here was a no-op on the template
@@ -188,77 +222,131 @@ export function AlertTemplatesView() {
     first.focus({ preventScroll: true });
   };
 
-  // Rename — a small dialog seeded with the current display name.
-  const [renameId, setRenameId] = React.useState<string | null>(null);
-  const [renameDraft, setRenameDraft] = React.useState({ en: "", ar: "" });
-  const openRename = (tp: AlertTemplate) => {
-    setRenameId(tp.id);
-    setRenameDraft({
-      en: tp.name?.en?.trim() || eventLabelIn(tp.eventKey, "en"),
-      ar: tp.name?.ar?.trim() || eventLabelIn(tp.eventKey, "ar"),
-    });
-  };
-  const commitRename = () => {
-    const en = renameDraft.en.trim();
-    const ar = renameDraft.ar.trim();
-    if (!renameId || !en || !ar) return;
-    setTemplates((prev) =>
-      prev.map((tp) => (tp.id === renameId ? { ...tp, name: { en, ar } } : tp)),
-    );
-    setRenameId(null);
-    toast(t("templates.renamedToast"));
+  // Create dialog. It keeps its own draft — event_type + severity + the four
+  // messages + steps — kept entirely separate from the (always-visible) editor's
+  // draft/steps for the active template, so opening it never disturbs an in-flight
+  // edit. Every field resets to blank each time it opens.
+  const [createOpen, setCreateOpen] = React.useState(false);
+  const [createEventType, setCreateEventType] = React.useState(EVENT_OPTIONS[0].value);
+  const [createSeverity, setCreateSeverity] =
+    React.useState<AlertTemplate["severity"]>("yellow");
+  const [createMsg, setCreateMsg] = React.useState<Record<TemplateVersionKey, string>>({
+    enDay: "",
+    enNight: "",
+    arDay: "",
+    arNight: "",
+  });
+  const [createSteps, setCreateSteps] = React.useState<LocalizedStep[]>([{ en: "", ar: "" }]);
+  const [creating, setCreating] = React.useState(false);
+
+  const openCreate = () => {
+    if (!canCreate) return;
+    setCreateEventType(EVENT_OPTIONS[0].value);
+    setCreateSeverity("yellow");
+    setCreateMsg({ enDay: "", enNight: "", arDay: "", arNight: "" });
+    setCreateSteps([{ en: "", ar: "" }]);
+    setCreateOpen(true);
   };
 
-  // Delete — confirmed, since there's no undo. Guarded so at least one template
-  // always remains (the editor assumes an active template exists).
+  // Create-dialog step helpers — parallel to the editor's, over createSteps.
+  const setCreateStep = (i: number, lang: keyof LocalizedStep, value: string) =>
+    setCreateSteps((s) => s.map((st, idx) => (idx === i ? { ...st, [lang]: value } : st)));
+  const addCreateStep = () => setCreateSteps((s) => [...s, { en: "", ar: "" }]);
+  const removeCreateStep = (i: number) =>
+    setCreateSteps((s) => s.filter((_, idx) => idx !== i));
+
+  const submitCreate = async () => {
+    if (!canCreate || creating) return;
+    // Same backend contract as Save: all four versions + ≥1 step with no empty
+    // element (each side non-empty).
+    if (VERSION_KEYS.some((k) => createMsg[k].trim() === "")) {
+      toast(t("templates.saveIncomplete"), "info");
+      return;
+    }
+    const validSteps = createSteps
+      .map((s) => ({ en: s.en.trim(), ar: s.ar.trim() }))
+      .filter((s) => s.en !== "" && s.ar !== "");
+    if (validSteps.length < 1) {
+      toast(t("templates.stepsRequired"), "info");
+      return;
+    }
+    setCreating(true);
+    try {
+      const res = await fetch(`${BASE}/api/templates`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event_type: createEventType,
+          severity: createSeverity,
+          message_en_day: createMsg.enDay,
+          message_en_night: createMsg.enNight,
+          message_ar_day: createMsg.arDay,
+          message_ar_night: createMsg.arNight,
+          guidance_steps_en: validSteps.map((s) => s.en),
+          guidance_steps_ar: validSteps.map((s) => s.ar),
+        }),
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        data?: unknown;
+      };
+      if (!res.ok) {
+        // Surfaces the backend 409 when (event_type, severity) already exists.
+        toast(json.error ?? t("templates.saveFailed"), "info");
+        return;
+      }
+      toast(t("templates.createdToast"));
+      setCreateOpen(false);
+      router.refresh();
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  // Delete — confirmed, since there's no undo.
   const [deleteId, setDeleteId] = React.useState<string | null>(null);
   const deleteTarget = templates.find((tp) => tp.id === deleteId) ?? null;
-  const confirmDelete = () => {
-    if (!deleteId) return;
-    setTemplates((prev) => {
-      const next = prev.filter((tp) => tp.id !== deleteId);
-      if (deleteId === activeId && next.length) setActiveId(next[0].id);
-      return next;
-    });
-    setDeleteId(null);
+  const confirmDelete = async () => {
+    if (!deleteId || readOnly) return;
+    const res = await fetch(`${BASE}/api/templates/${deleteId}`, { method: "DELETE" });
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    if (!res.ok) {
+      toast(json.error ?? t("templates.deleteFailed"), "info");
+      setDeleteId(null);
+      return;
+    }
     toast(t("templates.deletedToast"));
+    setDeleteId(null);
+    router.refresh();
   };
 
-  // The committed steps live in the shared store (so the citizen card reads
-  // them); fall back to the template's own seed when the store has none.
-  const savedSteps = templateSteps[active.eventKey] ?? active.steps;
-
-  // Draft buffers for the active template; Save commits them.
+  // Draft buffers for the active template; Save commits them. Steps live on the
+  // row now, so they seed straight from the active template.
   const [draft, setDraft] = React.useState<Record<TemplateVersionKey, string>>(active.versions);
-  const [steps, setSteps] = React.useState<LocalizedStep[]>(savedSteps);
+  const [steps, setSteps] = React.useState<LocalizedStep[]>(active.steps);
   const [previewKey, setPreviewKey] = React.useState<TemplateVersionKey>("enDay");
 
-  // Reset the drafts when switching templates (steps come from the store).
-  // Adjusting state during render — tracked against the previously loaded id —
-  // rather than in an effect avoids a frame showing the old template's draft.
-  const [draftForId, setDraftForId] = React.useState(activeId);
-  if (draftForId !== activeId) {
-    setDraftForId(activeId);
-    const next = templates.find((tp) => tp.id === activeId);
-    if (next) {
-      setDraft(next.versions);
-      setSteps(templateSteps[next.eventKey] ?? next.steps);
-    }
+  // Reset the drafts when the resolved active template changes (a selection, or
+  // a delete that falls the editor back to another row). Adjusting state during
+  // render — tracked against the previously loaded id — rather than in an effect
+  // avoids a frame showing the old template's draft.
+  const [draftForId, setDraftForId] = React.useState(active.id);
+  if (draftForId !== active.id) {
+    setDraftForId(active.id);
+    setDraft(active.versions);
+    setSteps(active.steps);
   }
 
   const done = doneCount(draft);
   const ready = done === VERSION_KEYS.length;
   const versionsDirty = VERSION_KEYS.some((k) => draft[k] !== active.versions[k]);
   const stepsDirty =
-    steps.length !== savedSteps.length ||
-    steps.some((s, i) => s.en !== savedSteps[i].en || s.ar !== savedSteps[i].ar);
-  // Response steps are separate citizen guidance, so they save on their own.
-  // Message-version edits still require all four versions before they persist
-  // (the A3.1 "complete before publish" rule).
-  const canSave = stepsDirty || (versionsDirty && ready);
+    steps.length !== active.steps.length ||
+    steps.some((s, i) => s.en !== active.steps[i].en || s.ar !== active.steps[i].ar);
+  const canSave = !readOnly && (versionsDirty || stepsDirty);
 
   const Icon = EVENT_ICON[active.eventKey] ?? TriangleAlert;
-  const eventName = templateName(active);
+  const eventName = eventLabel(active.eventKey);
 
   // Step list helpers. Each step holds both languages; edits target one side.
   const setStep = (i: number, lang: keyof LocalizedStep, value: string) =>
@@ -283,18 +371,43 @@ export function AlertTemplatesView() {
     setOverStep(null);
   };
 
-  const save = () => {
-    // Drop steps blank in both languages; trim what remains.
-    const cleanedSteps = steps
+  const save = async () => {
+    if (readOnly) return;
+    // The backend requires all four message versions and at least one guidance
+    // step (each with no empty element), so validate before sending.
+    if (VERSION_KEYS.some((k) => draft[k].trim() === "")) {
+      toast(t("templates.saveIncomplete"), "info");
+      return;
+    }
+    const validSteps = steps
       .map((s) => ({ en: s.en.trim(), ar: s.ar.trim() }))
-      .filter((s) => s.en || s.ar);
-    setTemplates((prev) =>
-      prev.map((tp) => (tp.id === activeId ? { ...tp, versions: draft, steps: cleanedSteps } : tp)),
-    );
-    // Commit steps to the shared store so the citizen alert card reflects them.
-    setTemplateSteps(active.eventKey, cleanedSteps);
-    setSteps(cleanedSteps);
+      .filter((s) => s.en !== "" && s.ar !== "");
+    if (validSteps.length < 1) {
+      toast(t("templates.stepsRequired"), "info");
+      return;
+    }
+    const res = await fetch(`${BASE}/api/templates/${active.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message_en_day: draft.enDay,
+        message_en_night: draft.enNight,
+        message_ar_day: draft.arDay,
+        message_ar_night: draft.arNight,
+        guidance_steps_en: validSteps.map((s) => s.en),
+        guidance_steps_ar: validSteps.map((s) => s.ar),
+      }),
+    });
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    if (!res.ok) {
+      toast(json.error ?? t("templates.saveFailed"), "info");
+      return;
+    }
+    // Reflect the cleaned steps locally so Save settles to "no changes" until
+    // the refreshed rows arrive.
+    setSteps(validSteps);
     toast(t("templates.savedToast"));
+    router.refresh();
   };
 
   const previewText = draft[previewKey].trim();
@@ -323,7 +436,9 @@ export function AlertTemplatesView() {
               variant="ghost"
               size="icon"
               className="size-7 text-muted-foreground hover:text-foreground"
-              onClick={addTemplate}
+              onClick={openCreate}
+              disabled={!canCreate}
+              title={t("templates.newTemplate")}
               aria-label={t("templates.newTemplate")}
             >
               <Plus className="size-4" />
@@ -407,13 +522,9 @@ export function AlertTemplatesView() {
                           <Pencil className="size-4" />
                           {t("templates.edit")}
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => openRename(tp)}>
-                          <PencilLine className="size-4" />
-                          {t("templates.rename")}
-                        </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => setDeleteId(tp.id)}
-                          disabled={templates.length <= 1}
+                          disabled={readOnly}
                           className="text-text-warning focus:bg-status-warning/10 focus:text-text-warning"
                         >
                           <Trash2 className="size-4" />
@@ -433,16 +544,19 @@ export function AlertTemplatesView() {
         <>
         {/* ── Pane 2 · Editor ────────────────────────────────────────────── */}
         <Card className="divide-y divide-border-subtle p-0">
-          {/* Header — active template, live completion meter, and Save. */}
+          {/* Header — active template, severity, live completion meter, Save. */}
           <div className="flex flex-wrap items-center justify-between gap-3 p-5">
             <div className="flex min-w-0 items-center gap-3">
               <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand-subtle text-brand-foreground">
                 <Icon className="size-6" aria-hidden />
               </span>
               <div className="min-w-0">
-                <h2 className="truncate text-lg font-semibold tracking-tight text-foreground">
-                  {eventName}
-                </h2>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="truncate text-lg font-semibold tracking-tight text-foreground">
+                    {eventName}
+                  </h2>
+                  <SeverityBadge severity={SEVERITY_TIER[active.severity]} />
+                </div>
                 <div className="mt-1.5 flex items-center gap-2">
                   <VersionMeter done={done} />
                   <span
@@ -489,6 +603,7 @@ export function AlertTemplatesView() {
                       value={draft[k]}
                       onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))}
                       onFocus={() => setPreviewKey(k)}
+                      disabled={readOnly}
                       dir={ar ? "rtl" : "ltr"}
                       rows={3}
                       className={cn(
@@ -542,7 +657,8 @@ export function AlertTemplatesView() {
                   >
                     <button
                       type="button"
-                      draggable
+                      draggable={!readOnly}
+                      disabled={readOnly}
                       onDragStart={(e) => {
                         setDragStep(i);
                         e.dataTransfer.effectAllowed = "move";
@@ -558,7 +674,7 @@ export function AlertTemplatesView() {
                           moveStep(i, 1);
                         }
                       }}
-                      className="mt-1 grid size-8 shrink-0 cursor-grab touch-none place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
+                      className="mt-1 grid size-8 shrink-0 cursor-grab touch-none place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing disabled:cursor-default disabled:opacity-50"
                       aria-label={t("templates.dragStep", { n: i + 1 })}
                       title={t("templates.dragStep", { n: i + 1 })}
                     >
@@ -573,6 +689,7 @@ export function AlertTemplatesView() {
                       <Input
                         value={step.en}
                         dir="ltr"
+                        disabled={readOnly}
                         onChange={(e) => setStep(i, "en", e.target.value)}
                         placeholder={t("templates.stepHint.en")}
                         aria-label={t("templates.stepEn", { n: i + 1 })}
@@ -580,6 +697,7 @@ export function AlertTemplatesView() {
                       <Input
                         value={step.ar}
                         dir="rtl"
+                        disabled={readOnly}
                         onChange={(e) => setStep(i, "ar", e.target.value)}
                         placeholder={t("templates.stepHint.ar")}
                         aria-label={t("templates.stepAr", { n: i + 1 })}
@@ -590,6 +708,7 @@ export function AlertTemplatesView() {
                       size="icon"
                       className="mt-1 size-8 shrink-0 text-muted-foreground hover:text-text-warning"
                       onClick={() => removeStep(i)}
+                      disabled={readOnly}
                       aria-label={t("templates.removeStep")}
                     >
                       <Trash2 className="size-4" />
@@ -598,7 +717,13 @@ export function AlertTemplatesView() {
                 ))
               )}
             </ul>
-            <Button variant="outline" size="sm" className="mt-3 w-fit" onClick={addStep}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3 w-fit"
+              onClick={addStep}
+              disabled={readOnly}
+            >
               <Plus className="size-4" />
               {t("templates.addStep")}
             </Button>
@@ -700,7 +825,7 @@ export function AlertTemplatesView() {
             title={t("templates.empty.title")}
             message={t("templates.empty.body")}
             action={
-              <Button onClick={addTemplate}>
+              <Button onClick={openCreate} disabled={!canCreate}>
                 <Plus className="size-4" />
                 {t("templates.newTemplate")}
               </Button>
@@ -710,56 +835,170 @@ export function AlertTemplatesView() {
         )}
       </div>
 
-      {/* Rename template */}
-      <Dialog open={renameId !== null} onOpenChange={(o) => !o && setRenameId(null)}>
-        <DialogContent className="sm:max-w-md">
+      {/* Create template — picks the (event_type, severity) identity this screen's
+          inline editor can't set, then the same four messages + steps. */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="max-h-[92vh] sm:max-w-2xl">
           <DialogHeader className="flex-row items-center gap-3.5 space-y-0">
             <span
               aria-hidden
               className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-subtle text-brand-foreground"
             >
-              <PencilLine className="size-5" />
+              <LayoutTemplate className="size-5" />
             </span>
             <div className="flex min-w-0 flex-col gap-1">
-              <DialogTitle>{t("templates.rename.title")}</DialogTitle>
-              <DialogDescription>{t("templates.rename.desc")}</DialogDescription>
+              <DialogTitle>{t("templates.create.title")}</DialogTitle>
+              <DialogDescription>{t("templates.create.desc")}</DialogDescription>
             </div>
           </DialogHeader>
 
           <form
-            id="template-rename-form"
-            className="grid gap-4"
+            id="template-create-form"
+            className="grid max-h-[calc(92vh-13rem)] gap-5 overflow-y-auto pe-1"
             onSubmit={(e) => {
               e.preventDefault();
-              commitRename();
+              submitCreate();
             }}
           >
-            <div className="grid gap-2">
-              <label htmlFor="template-name-en" className="text-sm font-medium text-foreground">
-                {t("templates.rename.labelEn")}
-              </label>
-              <Input
-                id="template-name-en"
-                dir="ltr"
-                value={renameDraft.en}
-                onChange={(e) => setRenameDraft((d) => ({ ...d, en: e.target.value }))}
-                placeholder={t("templates.rename.placeholderEn")}
-                autoComplete="off"
-                autoFocus
-              />
+            {/* Identity — event type × severity (the backend unique key). */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <label
+                  htmlFor="tpl-create-event"
+                  className="text-sm font-medium text-foreground"
+                >
+                  {t("templates.create.eventLabel")}
+                </label>
+                <Select value={createEventType} onValueChange={setCreateEventType}>
+                  <SelectTrigger id="tpl-create-event" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EVENT_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {t(o.labelKey)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <label
+                  htmlFor="tpl-create-severity"
+                  className="text-sm font-medium text-foreground"
+                >
+                  {t("templates.create.severityLabel")}
+                </label>
+                <Select
+                  value={createSeverity}
+                  onValueChange={(v) =>
+                    setCreateSeverity(v as AlertTemplate["severity"])
+                  }
+                >
+                  <SelectTrigger id="tpl-create-severity" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SEVERITY_OPTIONS.map((sev) => (
+                      <SelectItem key={sev} value={sev}>
+                        {t("severity." + SEVERITY_TIER[sev])}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div className="grid gap-2">
-              <label htmlFor="template-name-ar" className="text-sm font-medium text-foreground">
-                {t("templates.rename.labelAr")}
-              </label>
-              <Input
-                id="template-name-ar"
-                dir="rtl"
-                value={renameDraft.ar}
-                onChange={(e) => setRenameDraft((d) => ({ ...d, ar: e.target.value }))}
-                placeholder={t("templates.rename.placeholderAr")}
-                autoComplete="off"
+
+            {/* Message versions — 2×2 matrix, AR fields RTL. */}
+            <div>
+              <SectionHead
+                title={t("templates.section.messages")}
+                hint={t("templates.section.messagesHint")}
               />
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                {VERSION_KEYS.map((k) => {
+                  const ar = isArabicVersion(k);
+                  return (
+                    <div key={k} className="grid gap-1.5">
+                      <label
+                        htmlFor={`tpl-create-${k}`}
+                        className="text-sm font-medium text-foreground"
+                      >
+                        {t("templates.v." + k)}
+                      </label>
+                      <Textarea
+                        id={`tpl-create-${k}`}
+                        value={createMsg[k]}
+                        onChange={(e) =>
+                          setCreateMsg((d) => ({ ...d, [k]: e.target.value }))
+                        }
+                        dir={ar ? "rtl" : "ltr"}
+                        rows={3}
+                        className="min-h-20 resize-none"
+                        placeholder={
+                          ar
+                            ? t("templates.placeholder.ar")
+                            : t("templates.placeholder.en")
+                        }
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Response steps — bilingual rows with add/remove (at least one). */}
+            <div>
+              <SectionHead
+                title={t("templates.section.steps")}
+                hint={t("templates.section.stepsHint")}
+              />
+              <ul className="mt-4 grid gap-2">
+                {createSteps.map((step, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <span className="mt-1 grid size-8 shrink-0 place-items-center rounded-full bg-brand-subtle text-xs font-semibold tabular-nums text-brand-foreground">
+                      {i + 1}
+                    </span>
+                    <div className="grid flex-1 gap-1.5">
+                      <Input
+                        value={step.en}
+                        dir="ltr"
+                        onChange={(e) => setCreateStep(i, "en", e.target.value)}
+                        placeholder={t("templates.stepHint.en")}
+                        aria-label={t("templates.stepEn", { n: i + 1 })}
+                      />
+                      <Input
+                        value={step.ar}
+                        dir="rtl"
+                        onChange={(e) => setCreateStep(i, "ar", e.target.value)}
+                        placeholder={t("templates.stepHint.ar")}
+                        aria-label={t("templates.stepAr", { n: i + 1 })}
+                      />
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      type="button"
+                      className="mt-1 size-8 shrink-0 text-muted-foreground hover:text-text-warning"
+                      onClick={() => removeCreateStep(i)}
+                      disabled={createSteps.length <= 1}
+                      aria-label={t("templates.removeStep")}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                className="mt-3 w-fit"
+                onClick={addCreateStep}
+              >
+                <Plus className="size-4" />
+                {t("templates.addStep")}
+              </Button>
             </div>
           </form>
 
@@ -769,13 +1008,9 @@ export function AlertTemplatesView() {
                 {t("common.cancel")}
               </Button>
             </DialogClose>
-            <Button
-              type="submit"
-              form="template-rename-form"
-              disabled={!renameDraft.en.trim() || !renameDraft.ar.trim()}
-            >
-              <Check className="size-4" />
-              {t("common.save")}
+            <Button type="submit" form="template-create-form" disabled={creating || !canCreate}>
+              <Plus className="size-4" />
+              {t("templates.create.submit")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -807,7 +1042,12 @@ export function AlertTemplatesView() {
                 {t("common.cancel")}
               </Button>
             </DialogClose>
-            <Button variant="destructive" type="button" onClick={confirmDelete}>
+            <Button
+              variant="destructive"
+              type="button"
+              onClick={confirmDelete}
+              disabled={readOnly}
+            >
               <Trash2 className="size-4" />
               {t("common.delete")}
             </Button>

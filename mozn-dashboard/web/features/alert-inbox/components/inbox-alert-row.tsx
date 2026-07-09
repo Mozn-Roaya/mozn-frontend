@@ -47,6 +47,7 @@ export function InboxAlertRow({
   acknowledged,
   escalated,
   selected,
+  readOnly,
   onToggleSelect,
   onAcknowledge,
   onReopen,
@@ -58,11 +59,12 @@ export function InboxAlertRow({
   acknowledged: boolean;
   escalated: boolean;
   selected: boolean;
+  readOnly?: boolean;
   onToggleSelect: () => void;
-  onAcknowledge: (id: string) => void;
+  onAcknowledge: (id: string, note: string) => void;
   onReopen: (id: string) => void;
   onEscalate: (id: string) => void;
-  onDismiss: (id: string) => void;
+  onDismiss: (id: string, reason: string) => void;
   rowClassName?: string;
 }) {
   const t = useT();
@@ -79,15 +81,13 @@ export function InboxAlertRow({
 
   const confirmAck = () => {
     if (!note.trim()) return;
-    onAcknowledge(item.id);
-    toast(t("inbox.toast.acknowledged"));
+    onAcknowledge(item.id, note.trim()); // parent hits the backend + toasts
     setAckOpen(false);
     setNote("");
   };
   const confirmDismiss = () => {
     if (!reason.trim()) return;
-    onDismiss(item.id);
-    toast(t("inbox.toast.dismissed"), "info");
+    onDismiss(item.id, reason.trim()); // parent hits the backend + toasts
     setDismissOpen(false);
     setReason("");
   };
@@ -163,60 +163,56 @@ export function InboxAlertRow({
                 <Check className="size-3.5" aria-hidden />
                 {t("inbox.chip.acknowledged")}
               </span>
-            ) : (
+            ) : readOnly ? null : (
               <Button size="sm" onClick={() => setAckOpen(true)}>
                 <Check className="size-4" />
                 {t("inbox.action.acknowledge")}
               </Button>
             )}
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="size-8 text-muted-foreground"
-                  aria-label={t("inbox.action.more")}
-                >
-                  <MoreHorizontal className="size-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {acknowledged ? (
-                  <DropdownMenuItem
-                    onClick={() => {
-                      onReopen(item.id);
-                      toast(t("inbox.toast.reopened"), "info");
-                    }}
+            {readOnly ? (
+              acknowledged ? null : <span className="text-xs text-muted-foreground">—</span>
+            ) : (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="size-8 text-muted-foreground"
+                    aria-label={t("inbox.action.more")}
                   >
-                    <RotateCcw className="size-4" />
-                    {t("inbox.action.reopen")}
+                    <MoreHorizontal className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {acknowledged ? (
+                    <DropdownMenuItem onClick={() => onReopen(item.id)}>
+                      <RotateCcw className="size-4" />
+                      {t("inbox.action.reopen")}
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem
+                      disabled={escalated}
+                      onClick={() => onEscalate(item.id)}
+                    >
+                      <ChevronsUp className="size-4" />
+                      {escalated ? t("inbox.action.escalated") : t("inbox.action.escalate")}
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onClick={() => toast(t("inbox.toast.maintenance"))}>
+                    <Wrench className="size-4" />
+                    {t("inbox.action.setMaintenance")}
                   </DropdownMenuItem>
-                ) : (
                   <DropdownMenuItem
-                    disabled={escalated}
-                    onClick={() => {
-                      onEscalate(item.id);
-                      toast(t("inbox.toast.escalated"));
-                    }}
+                    onClick={() => setDismissOpen(true)}
+                    className="text-text-warning focus:bg-status-warning/10 focus:text-text-warning"
                   >
-                    <ChevronsUp className="size-4" />
-                    {escalated ? t("inbox.action.escalated") : t("inbox.action.escalate")}
+                    <Trash2 className="size-4" />
+                    {t("inbox.action.dismiss")}
                   </DropdownMenuItem>
-                )}
-                <DropdownMenuItem onClick={() => toast(t("inbox.toast.maintenance"))}>
-                  <Wrench className="size-4" />
-                  {t("inbox.action.setMaintenance")}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setDismissOpen(true)}
-                  className="text-text-warning focus:bg-status-warning/10 focus:text-text-warning"
-                >
-                  <Trash2 className="size-4" />
-                  {t("inbox.action.dismiss")}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         </TableCell>
       </TableRow>

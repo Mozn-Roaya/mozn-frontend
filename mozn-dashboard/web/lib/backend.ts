@@ -97,6 +97,73 @@ export async function backendData<T>(path: string, init?: RequestInit): Promise<
   return (await backendFetch<T>(path, init)).data;
 }
 
+/** Result of a mutation — carries the backend's own status + message so route
+ * handlers can surface a specific error (e.g. the role-lockout guard, a 409
+ * duplicate) rather than a generic one. Never throws for a non-2xx. */
+export interface MutationResult<T> {
+  ok: boolean;
+  status: number;
+  data?: T;
+  /** Human-readable text: the envelope `message` on success, or `error` on failure. */
+  message?: string;
+  /** Machine code from the envelope `code` (e.g. INVALID_STATE_TRANSITION), when present. */
+  errorCode?: string;
+}
+
+/**
+ * Perform a write against the backend and return its status + envelope message
+ * instead of throwing. Attaches the JWT (from the cookie) and JSON headers.
+ * A 401 still throws `AuthError` so pages can bounce to login; everything else
+ * (400/403/404/409/…) is returned as `{ ok:false, status, message }`.
+ */
+export async function backendMutate<T = unknown>(
+  path: string,
+  init: RequestInit,
+): Promise<MutationResult<T>> {
+  const token = await readToken();
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...init.headers,
+      },
+      cache: "no-store",
+    });
+  } catch {
+    return {
+      ok: false,
+      status: 0,
+      message: `Cannot reach the API at ${API_BASE_URL}. Is the Go backend running?`,
+    };
+  }
+
+  if (res.status === 401) {
+    throw new AuthError();
+  }
+
+  let body: BackendEnvelope<T> | undefined;
+  try {
+    body = (await res.json()) as BackendEnvelope<T>;
+  } catch {
+    /* some 2xx responses may carry no body */
+  }
+
+  // Envelope carries the human-readable text in `message` on success and in
+  // `error` on failure; `code` holds the machine code (e.g. INVALID_STATE_TRANSITION).
+  return {
+    ok: res.ok,
+    status: res.status,
+    data: body?.data,
+    message: body?.message ?? body?.error,
+    errorCode: body?.code,
+  };
+}
+
 /** GET /api/me — the signed-in user (identity + permissions + region scope). */
 export function getCurrentUser(): Promise<BackendCurrentUser> {
   return backendData<BackendCurrentUser>("/api/me");

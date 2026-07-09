@@ -11,6 +11,14 @@ export type { ThresholdMetric };
 export type TierMode = "auto" | "manual";
 
 export interface ThresholdTier {
+  /** Backend AlertThreshold row id — targets PUT/DELETE for this tier. */
+  id: string;
+  /** Raw backend identity (immutable on PUT): parameter + severity + applies_to. */
+  parameter: string;
+  severity: "yellow" | "orange" | "red";
+  appliesTo: "observed" | "forecast" | "both";
+  isActive: boolean;
+  sustainDurationMinutes: number | null;
   name: string;
   mode: TierMode;
   description: string;
@@ -43,7 +51,10 @@ export interface ImpactStation {
 }
 
 export interface ThresholdChange {
+  /** History row id — sent as {history_id} to the revert endpoint. */
   id: string;
+  /** The threshold row the history belongs to — the revert URL target. */
+  thresholdId: string;
   change: string;
   by: string;
   when: string;

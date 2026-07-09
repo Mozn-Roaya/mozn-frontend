@@ -11,12 +11,17 @@ interface RoleContextValue {
   email: string;
   role: UserRole;
   setRole: (role: UserRole) => void;
-  /** True for Gov Editor / Gov Viewer — the region-scoped, mostly read-only roles. */
+  /** True for a region-scoped account (from /api/me), not the previewed role. */
   isGov: boolean;
-  /** Gov Viewer can read but not mutate; Super Admin and Gov Editor can act. */
+  /** True when the account holds no write permission at all (from /api/me). */
   readOnly: boolean;
   /** Region this (gov) account is scoped to. Super Admin sees all regions. */
   assignedRegion: string;
+  /** The account's real backend permissions. */
+  permissions: string[];
+  /** Whether the signed-in account holds a specific backend permission. Gate
+   * individual actions on this (e.g. can("thresholds.create")). */
+  can: (permission: string) => boolean;
 }
 
 const RoleContext = React.createContext<RoleContextValue>({
@@ -27,6 +32,8 @@ const RoleContext = React.createContext<RoleContextValue>({
   isGov: true,
   readOnly: true,
   assignedRegion: "",
+  permissions: [],
+  can: () => false,
 });
 
 /**
@@ -52,13 +59,24 @@ export function RoleProvider({
       email: initialUser.email,
       role,
       setRole,
-      // Derived from the current (possibly previewed) role, matching the design's
-      // role model. At login this is the user's real role, so gating is correct.
-      isGov: role !== "Super Admin",
-      readOnly: role === "Gov Viewer",
+      // Gating reflects the REAL signed-in account (its /api/me permissions), not
+      // the previewed role — "whoever logs in sees exactly what they have". The
+      // role switcher stays a cosmetic label preview; the backend enforces perms.
+      isGov: initialUser.isGov,
+      readOnly: initialUser.readOnly,
       assignedRegion: initialUser.assignedRegion,
+      permissions: initialUser.permissions,
+      can: (permission: string) => initialUser.permissions.includes(permission),
     }),
-    [role, initialUser.name, initialUser.email, initialUser.assignedRegion],
+    [
+      role,
+      initialUser.name,
+      initialUser.email,
+      initialUser.assignedRegion,
+      initialUser.isGov,
+      initialUser.readOnly,
+      initialUser.permissions,
+    ],
   );
 
   return <RoleContext.Provider value={value}>{children}</RoleContext.Provider>;

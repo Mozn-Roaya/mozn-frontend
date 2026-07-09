@@ -166,4 +166,8 @@ export const settings: Record<string, Entry> = {
   "settings.unsaved": { en: "You have unsaved changes", ar: "لديك تغييرات غير محفوظة" },
   "settings.discard": { en: "Discard", ar: "تجاهل" },
   "settings.saved": { en: "Settings saved", ar: "تم حفظ الإعدادات" },
+  "settings.saveFailed": {
+    en: "Couldn't save settings. Please try again.",
+    ar: "تعذّر حفظ الإعدادات. حاول مرة أخرى.",
+  },
 };

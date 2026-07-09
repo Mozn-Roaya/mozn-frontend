@@ -30,6 +30,8 @@ export interface InboxItem {
   /** Right-hand readout — e.g. "SUSTAINED 32 / 30 min" or "WINDOW Thu 18:00". */
   meter: { label: string; value: string };
   recommended: string;
+  /** Operator has taken ownership (backend acknowledged_at set) but it's still pending. */
+  acknowledged: boolean;
   /** Optional — derived client-side when the backend omits it (see itemTrend). */
   trend?: TrendDirection;
 }

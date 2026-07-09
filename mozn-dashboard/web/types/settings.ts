@@ -13,10 +13,19 @@ export interface NotificationPref {
 }
 
 export interface ValidationRule {
+  /** Backend validation_rule row id — targets PUT /api/validation-rules/:id. */
+  id: string;
+  /** Raw backend parameter key (e.g. "temp_high_c") — needed to keep it on PUT. */
+  parameter: string;
   metric: string;
   validRange: string;
   maxRate: string;
   active: boolean;
+  /** Structured numeric fields for editing (avoid the lossy display-string round-trip). */
+  validRangeMin: number | null;
+  validRangeMax: number | null;
+  maxRateOfChange: number | null;
+  rateIntervalMin: number | null;
 }
 
 export interface SettingsPage {

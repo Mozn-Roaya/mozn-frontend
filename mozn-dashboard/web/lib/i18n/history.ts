@@ -11,6 +11,11 @@ export const history: Record<string, Entry> = {
     en: "Chronological record of every alert. Retained for 2 years.",
     ar: "سجل زمني لكل تنبيه. يُحفظ لمدة سنتين.",
   },
+  "history.range.label": { en: "Time range", ar: "النطاق الزمني" },
+  "history.range.24h": { en: "24h", ar: "٢٤س" },
+  "history.range.7d": { en: "7d", ar: "٧ أيام" },
+  "history.range.30d": { en: "30d", ar: "٣٠ يوم" },
+  "history.range.90d": { en: "90d", ar: "٩٠ يوم" },
 
   // Activity Log — page heading
   "history.activity.title": { en: "Activity Log", ar: "سجل النشاط" },

@@ -1,9 +1,12 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { Inbox, SearchX } from "lucide-react";
 
 import { EmptyState } from "@/components/common/empty-state";
+import { toast } from "@/components/ui/toaster";
+import { useRole } from "@/components/providers/role-provider";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -37,9 +40,13 @@ import type { AlertInboxPage } from "@/features/alert-inbox/types";
 
 type SortKey = "severity" | "alert";
 
+const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+
 export function AlertInboxView({ page }: { page: AlertInboxPage }) {
   const t = useT();
   const td = useTD();
+  const router = useRouter();
+  const { readOnly } = useRole();
   // Multi-select severity filter (empty = all), shadcn faceted-filter style.
   const [severities, setSeverities] = React.useState<string[]>([]);
   const [query, setQuery] = React.useState("");
@@ -50,9 +57,14 @@ export function AlertInboxView({ page }: { page: AlertInboxPage }) {
     dir: "asc",
   });
   const onSort = (key: SortKey) => setSort((prev) => nextSort(prev, key));
-  const [acked, setAcked] = React.useState<Set<string>>(new Set());
   const [dismissed, setDismissed] = React.useState<Set<string>>(new Set());
   const [escalated, setEscalated] = React.useState<Set<string>>(new Set());
+  // Acknowledged state is server-backed (backend acknowledged_at); after a write
+  // we router.refresh() so the list reflects the backend, not a local guess.
+  const acked = React.useMemo(
+    () => new Set(page.items.filter((i) => i.acknowledged).map((i) => i.id)),
+    [page.items],
+  );
 
   // Distinguish "no open alerts at all" (inbox zero) from "filters hide them".
   const hasFilters = severities.length > 0 || query.trim() !== "";
@@ -61,15 +73,78 @@ export function AlertInboxView({ page }: { page: AlertInboxPage }) {
     setQuery("");
   };
 
-  const acknowledge = (id: string) => setAcked((p) => new Set(p).add(id));
-  const reopen = (id: string) =>
-    setAcked((p) => {
-      const next = new Set(p);
-      next.delete(id);
-      return next;
+  const acknowledge = async (id: string, note: string) => {
+    const res = await fetch(`${BASE}/api/alerts/${id}/acknowledge`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note }),
     });
-  const dismiss = (id: string) => setDismissed((p) => new Set(p).add(id));
-  const escalate = (id: string) => setEscalated((p) => new Set(p).add(id));
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    if (!res.ok) {
+      toast(json.error ?? t("inbox.toast.failed"), "info");
+      return;
+    }
+    toast(t("inbox.toast.acknowledged"));
+    router.refresh();
+  };
+  const reopen = async (id: string) => {
+    const res = await fetch(`${BASE}/api/alerts/${id}/unacknowledge`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    if (!res.ok) {
+      toast(json.error ?? t("inbox.toast.failed"), "info");
+      return;
+    }
+    toast(t("inbox.toast.reopened"), "info");
+    router.refresh();
+  };
+  // Dismiss a pending inbox alert = reject it as a false positive (backend
+  // reject; it deactivates + drops out of the pending queue on refresh).
+  const dismiss = async (id: string, reason: string) => {
+    setDismissed((p) => new Set(p).add(id)); // optimistic hide
+    const res = await fetch(`${BASE}/api/alerts/${id}/reject`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note: reason }),
+    });
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    if (!res.ok) {
+      setDismissed((p) => {
+        const n = new Set(p);
+        n.delete(id);
+        return n;
+      });
+      toast(json.error ?? t("inbox.toast.failed"), "info");
+      return;
+    }
+    toast(t("inbox.toast.dismissed"), "info");
+    router.refresh();
+  };
+  const escalate = async (id: string) => {
+    const item = page.items.find((i) => i.id === id);
+    const next = item?.severity === "routine" ? "urgent" : "critical";
+    setEscalated((p) => new Set(p).add(id)); // optimistic
+    const res = await fetch(`${BASE}/api/alerts/${id}/escalate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ urgency: next }),
+    });
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    if (!res.ok) {
+      setEscalated((p) => {
+        const n = new Set(p);
+        n.delete(id);
+        return n;
+      });
+      toast(json.error ?? t("inbox.toast.failed"), "info");
+      return;
+    }
+    toast(t("inbox.toast.escalated"));
+    router.refresh();
+  };
 
   const live = React.useMemo(
     () => page.items.filter((i) => !dismissed.has(i.id)),
@@ -228,6 +303,7 @@ export function AlertInboxView({ page }: { page: AlertInboxPage }) {
                   acknowledged={acked.has(item.id)}
                   escalated={escalated.has(item.id)}
                   selected={selected.has(item.id)}
+                  readOnly={readOnly}
                   onToggleSelect={() => toggleOne(item.id)}
                   onAcknowledge={acknowledge}
                   onReopen={reopen}

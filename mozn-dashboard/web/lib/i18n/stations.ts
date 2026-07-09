@@ -61,6 +61,9 @@ export const stations: Record<string, Entry> = {
     en: 'Saved changes to "{name}"',
     ar: 'تم حفظ التغييرات على "{name}"',
   },
+  "stations.saveFailed": { en: "Couldn't save station", ar: "تعذّر حفظ المحطة" },
+  "stations.maintenanceToast": { en: "Set to maintenance · logged", ar: "تم التحويل إلى الصيانة · سُجّل" },
+  "stations.maintenanceFailed": { en: "Couldn't update station", ar: "تعذّر تحديث المحطة" },
   "stations.viewLive": { en: "Live view", ar: "العرض المباشر" },
 
   // Form section headers
@@ -161,6 +164,9 @@ export const stations: Record<string, Entry> = {
   "stations.section.sensors": { en: "Sensors", ar: "الحسّاسات" },
   "stations.section.comms": { en: "Communication & data", ar: "الاتصال والبيانات" },
   "stations.stationId": { en: "Station ID", ar: "معرّف المحطة" },
+  "stations.stationIdAuto": { en: "Auto-generated on save", ar: "يُنشأ تلقائيًا عند الحفظ" },
+  "stations.wuStationId": { en: "Weather Underground ID", ar: "معرّف Weather Underground" },
+  "stations.wuStationIdPlaceholder": { en: "e.g. ILIBYA42 (optional)", ar: "مثال: ILIBYA42 (اختياري)" },
   "stations.initialStatus": { en: "Initial status", ar: "الحالة الأولية" },
   "stations.status.active": { en: "Active", ar: "نشطة" },
   "stations.chip.withinLibya": { en: "Within Libya boundary", ar: "داخل حدود ليبيا" },
@@ -172,16 +178,23 @@ export const stations: Record<string, Entry> = {
 
   // City + per-city emergency contacts
   "stations.city": { en: "City", ar: "المدينة" },
-  "stations.cityPlaceholder": { en: "e.g. Coastal City", ar: "مثال: مدينة ساحلية" },
+  "stations.cityPlaceholder": { en: "Select a city…", ar: "اختر مدينة…" },
+  "stations.noMunicipalities": { en: "No cities available", ar: "لا توجد مدن متاحة" },
   "stations.section.emergency": { en: "Emergency contacts", ar: "أرقام الطوارئ" },
   "stations.emergencySharedHint": {
     en: "Shown to citizens during alerts — shared by all stations in {city}.",
     ar: "تظهر للمواطنين أثناء التنبيهات — مشتركة بين كل محطات {city}.",
   },
+  "stations.emergencyPickHint": {
+    en: "Pick the city above to view and edit its emergency numbers.",
+    ar: "اختر المدينة أعلاه لعرض أرقام الطوارئ الخاصة بها وتعديلها.",
+  },
   "stations.emergencyNeedsCity": {
-    en: "Set the city above to configure its emergency numbers.",
+    en: "Select the city above to configure its emergency numbers.",
     ar: "حدّد المدينة أعلاه لضبط أرقام الطوارئ الخاصة بها.",
   },
+  "stations.contactsSaved": { en: "Emergency numbers saved", ar: "تم حفظ أرقام الطوارئ" },
+  "stations.contactsSaveFailed": { en: "Couldn't save numbers", ar: "تعذّر حفظ الأرقام" },
   "stations.emergencyServices": { en: "Emergency services", ar: "خدمات الطوارئ" },
   "stations.civilDefense": { en: "Civil defense", ar: "الدفاع المدني" },
 };

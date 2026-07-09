@@ -1,8 +1,10 @@
 "use client";
 
 import * as React from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Download, Inbox, SearchX } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { EmptyState } from "@/components/common/empty-state";
 import { SearchInput } from "@/components/common/search-input";
@@ -76,8 +78,23 @@ function fmtDuration(sec: number, locale: Locale = "en"): string {
   return h ? `${h}${hu} ${String(m).padStart(2, "0")}${mu}` : `${m}${mu}`;
 }
 
-export function AlertHistoryView({ page }: { page: AlertHistoryPage }) {
+const RANGE_KEYS = ["24h", "7d", "30d", "90d"] as const;
+
+export function AlertHistoryView({ page, range }: { page: AlertHistoryPage; range: string }) {
   const { locale, t, td } = useLocale();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [rangePending, startRangeTransition] = React.useTransition();
+
+  // The date range is a SERVER filter (the page reads ?range and refetches with
+  // from/to); everything else below is client-side over the returned window.
+  const setRange = (r: string) => {
+    if (!r || r === range) return;
+    const next = new URLSearchParams(searchParams.toString());
+    next.set("range", r);
+    startRangeTransition(() => router.push(`${pathname}?${next.toString()}`));
+  };
 
   // Multi-select faceted filters (empty selection = all).
   const [severities, setSeverities] = React.useState<string[]>([]);
@@ -242,6 +259,21 @@ export function AlertHistoryView({ page }: { page: AlertHistoryPage }) {
   return (
     <div className="space-y-6">
       <PageHeading title={t("history.alerts.title")} subtitle={t("history.alerts.subtitle")}>
+        <ToggleGroup
+          type="single"
+          value={range}
+          onValueChange={setRange}
+          variant="outline"
+          size="sm"
+          disabled={rangePending}
+          aria-label={t("history.range.label")}
+        >
+          {RANGE_KEYS.map((r) => (
+            <ToggleGroupItem key={r} value={r}>
+              {t("history.range." + r)}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
         <Button variant="outline" onClick={handleExport}>
           <Download className="size-4" />
           {t("common.export")}

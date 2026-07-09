@@ -139,6 +139,7 @@ export function MapCanvas({ stations }: { stations: MapStation[] }) {
         >
           <StationSummaryCard
             detail={detailFromMapStation(selectedStation)}
+            stationId={selectedStation.id}
             onClose={clearSelection}
           />
         </div>

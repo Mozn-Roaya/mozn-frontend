@@ -32,6 +32,9 @@ export const thresholds: Record<string, Entry> = {
     en: "Thresholds saved and applied",
     ar: "تم حفظ الحدود وتطبيقها",
   },
+  "thresholds.saveFailed": { en: "Couldn't save thresholds", ar: "تعذّر حفظ الحدود" },
+  "thresholds.saveInvalid": { en: "Fix the highlighted tiers first", ar: "صحّح المستويات المميّزة أولاً" },
+  "thresholds.noChanges": { en: "No changes to save", ar: "لا توجد تغييرات للحفظ" },
 
   // Top-level tabs (Single metric / Compound rules / Forecast-based)
 
@@ -56,7 +59,72 @@ export const thresholds: Record<string, Entry> = {
 
   // Table column headers (compound / forecast tabs)
 
-  // Tier editor dialog
+  // Create-threshold dialog
+  "thresholds.create.newButton": { en: "New threshold", ar: "حد جديد" },
+  "thresholds.create.title": { en: "New threshold", ar: "حد جديد" },
+  "thresholds.create.desc": {
+    en: "Add an alert threshold for a region and parameter.",
+    ar: "أضف حدًّا للتنبيه لمنطقة ومقياس محددين.",
+  },
+  "thresholds.create.region": { en: "Region", ar: "المنطقة" },
+  "thresholds.create.regionPlaceholder": { en: "Select a region", ar: "اختر منطقة" },
+  "thresholds.create.noRegions": {
+    en: "No regions available to assign.",
+    ar: "لا توجد مناطق متاحة للتعيين.",
+  },
+  "thresholds.create.parameter": { en: "Parameter", ar: "المقياس" },
+  "thresholds.create.severity": { en: "Severity", ar: "مستوى الخطورة" },
+  "thresholds.create.value": { en: "Value", ar: "القيمة" },
+  "thresholds.create.appliesTo": { en: "Applies to", ar: "ينطبق على" },
+  "thresholds.create.appliesTo.observed": { en: "Observed", ar: "المرصودة" },
+  "thresholds.create.appliesTo.forecast": { en: "Forecast", ar: "المتوقعة" },
+  "thresholds.create.appliesTo.both": { en: "Both", ar: "كلاهما" },
+  "thresholds.create.previewHeading": { en: "Impact preview", ar: "معاينة الأثر" },
+  "thresholds.create.previewHint": {
+    en: "Run a dry run to see how many stations this would affect.",
+    ar: "شغّل محاكاة لمعرفة عدد المحطات التي سيؤثّر عليها هذا الحد.",
+  },
+  "thresholds.create.previewButton": { en: "Preview impact", ar: "معاينة الأثر" },
+  "thresholds.create.previewFailed": {
+    en: "Couldn't preview impact",
+    ar: "تعذّر معاينة الأثر",
+  },
+  "thresholds.create.affected": {
+    en: "{count} stations affected",
+    ar: "{count} محطة متأثرة",
+  },
+  "thresholds.create.wouldFire": {
+    en: "{count} would fire now",
+    ar: "{count} ستُطلق تنبيهًا الآن",
+  },
+  "thresholds.create.evaluated": {
+    en: "{count} stations evaluated",
+    ar: "تم تقييم {count} محطة",
+  },
+  "thresholds.create.fillFirst": {
+    en: "Choose a region, parameter and value first",
+    ar: "اختر المنطقة والمقياس والقيمة أولًا",
+  },
+  "thresholds.create.submit": { en: "Create threshold", ar: "إنشاء الحد" },
+  "thresholds.create.created": { en: "Threshold created", ar: "تم إنشاء الحد" },
+  "thresholds.create.failed": {
+    en: "Couldn't create threshold",
+    ar: "تعذّر إنشاء الحد",
+  },
+
+  // Delete-threshold confirm
+  "thresholds.delete.label": { en: "Delete {tier} threshold", ar: "حذف حد {tier}" },
+  "thresholds.delete.title": { en: "Delete this threshold?", ar: "حذف هذا الحد؟" },
+  "thresholds.delete.desc": {
+    en: "This removes the {tier} threshold for {metric}. Stations will stop alerting at this level.",
+    ar: "سيؤدي هذا إلى إزالة حد {tier} لـ{metric}. ستتوقف المحطات عن التنبيه عند هذا المستوى.",
+  },
+  "thresholds.delete.confirm": { en: "Delete threshold", ar: "حذف الحد" },
+  "thresholds.delete.deleted": { en: "Threshold deleted", ar: "تم حذف الحد" },
+  "thresholds.delete.failed": {
+    en: "Couldn't delete threshold",
+    ar: "تعذّر حذف الحد",
+  },
 
   // Change history
   "thresholds.history.title": { en: "Change history", ar: "سجل التغييرات" },
@@ -71,6 +139,7 @@ export const thresholds: Record<string, Entry> = {
   },
   "thresholds.history.revertConfirmCta": { en: "Revert change", ar: "نعم، تراجع" },
   "thresholds.history.reverted": { en: "Change reverted", ar: "تم التراجع عن التغيير" },
+  "thresholds.history.revertFailed": { en: "Couldn't revert change", ar: "تعذّر التراجع عن التغيير" },
   "thresholds.history.emptyTitle": { en: "No changes yet", ar: "لا توجد تغييرات بعد" },
   "thresholds.history.empty": { en: "No changes recorded yet.", ar: "لا توجد تغييرات مسجّلة بعد." },
   "thresholds.history.by": { en: "by {name}", ar: "بواسطة {name}" },

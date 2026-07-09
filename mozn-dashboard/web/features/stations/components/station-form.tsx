@@ -34,16 +34,21 @@ import {
 import { toast } from "@/components/ui/toaster";
 import { useLocale } from "@/components/providers/locale-provider";
 import { useAdminConfig } from "@/components/providers/admin-config-provider";
+import { useRole } from "@/components/providers/role-provider";
 import { StationSummaryCard } from "@/components/station-detail/station-summary-card";
 import type { StationDetail } from "@/components/station-detail/station-detail";
+import type { MunicipalityOption } from "@/lib/api";
 import {
   DEFAULT_SENSORS,
   isInLibya,
+  paramsToSensors,
   SENSORS,
+  sensorsToParams,
   STEP_OVERRIDE_EVENT,
   type SensorKey,
   type StationFormValue,
   type StationInitialStatus,
+  type StationInterval,
 } from "./station-form-shared";
 
 // Leaflet touches `window` on import — load the picker client-only.
@@ -63,12 +68,25 @@ const StationLocationPicker = dynamic(
 );
 
 export interface StationFormInitial {
+  /** Real station UUID (edit mode) — the PUT target + shown as the Station ID. */
+  id?: string;
   name: string;
   nameAr: string;
   region: string;
   city?: string;
   code?: string;
+  /** Owning municipality UUID (edit mode) — preselects the city + its contacts. */
+  municipalityId?: string;
+  latitude?: number;
+  longitude?: number;
+  /** Backend sensor param keys (e.g. "temp_high_c"); mapped to FE sensor groups. */
+  sensors?: string[];
+  reportIntervalMinutes?: number | null;
+  operationalStatus?: "active" | "maintenance" | "deactivated";
+  wuStationId?: string | null;
 }
+
+const CONTACTS_API_BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 function hashCode(s: string): string {
   let h = 0;
@@ -89,22 +107,44 @@ export function StationForm({
   const router = useRouter();
   const { resolvedTheme } = useTheme();
   const theme = resolvedTheme === "dark" ? "dark" : "light";
-  const { contactsForCity, setCityContacts, templateSteps } = useAdminConfig();
+  const { templateSteps } = useAdminConfig();
+  const { readOnly } = useRole();
+  const [saving, setSaving] = React.useState(false);
+
+  // Derive the editable defaults from the (edit-mode) station detail so a save
+  // round-trips the real values instead of clobbering coords/sensors/interval.
+  const initialStatus: StationInitialStatus =
+    initial?.operationalStatus === "maintenance"
+      ? "maintenance"
+      : initial?.operationalStatus === "deactivated"
+        ? "offline"
+        : "active";
+  const initialInterval: StationInterval = (() => {
+    const s = initial?.reportIntervalMinutes != null ? String(initial.reportIntervalMinutes) : "5";
+    return (["1", "5", "15", "60"] as const).includes(s as StationInterval)
+      ? (s as StationInterval)
+      : "5";
+  })();
+  const initialSensors = initial?.sensors
+    ? paramsToSensors(initial.sensors)
+    : SENSORS.reduce(
+        (acc, s) => ({ ...acc, [s]: DEFAULT_SENSORS.includes(s) }),
+        {} as Record<SensorKey, boolean>,
+      );
 
   const [form, setForm] = React.useState<StationFormValue>(() => ({
     name: initial?.name ?? "",
     nameAr: initial?.nameAr ?? "",
     region: initial?.region ?? regions[0] ?? "",
     city: initial?.city ?? initial?.name?.split(/\s+/)[0] ?? "",
-    lat: "",
-    lng: "",
-    status: "active",
+    municipalityId: initial?.municipalityId ?? "",
+    wuStationId: initial?.wuStationId ?? "",
+    lat: initial?.latitude != null ? String(initial.latitude) : "",
+    lng: initial?.longitude != null ? String(initial.longitude) : "",
+    status: initialStatus,
     protocol: "lora",
-    interval: "5",
-    sensors: SENSORS.reduce(
-      (acc, s) => ({ ...acc, [s]: DEFAULT_SENSORS.includes(s) }),
-      {} as Record<SensorKey, boolean>,
-    ),
+    interval: initialInterval,
+    sensors: initialSensors,
     overrideSteps: false,
     steps: [],
   }));
@@ -149,15 +189,99 @@ export function StationForm({
   const set = <K extends keyof StationFormValue>(key: K, value: StationFormValue[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
+  // ── Emergency contacts (per municipality) ─────────────────────────────────
+  // Contacts live on the municipality (backend), not localStorage: pick the
+  // city, edit the two numbers, and they persist on blur via the municipalities
+  // API. readOnly (Gov Viewer) can view but not edit.
+  const [municipalities, setMunicipalities] = React.useState<MunicipalityOption[]>([]);
+  const [contacts, setContacts] = React.useState({ emergencyServices: "", civilDefense: "" });
+  const [contactsSaving, setContactsSaving] = React.useState(false);
+  const savedContactsRef = React.useRef({ emergencyServices: "", civilDefense: "" });
+
+  React.useEffect(() => {
+    let alive = true;
+    fetch(`${CONTACTS_API_BASE}/api/municipalities`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => {
+        if (!alive) return;
+        const list: MunicipalityOption[] = Array.isArray(data) ? data : [];
+        setMunicipalities(list);
+        // Edit mode: seed the contact inputs from the station's municipality.
+        const current = list.find((m) => m.id === (initial?.municipalityId ?? ""));
+        if (current) {
+          const c = { emergencyServices: current.emergencyServices, civilDefense: current.civilDefense };
+          setContacts(c);
+          savedContactsRef.current = c;
+        }
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [initial?.municipalityId]);
+
+  // Prefer municipalities in the selected region; fall back to all if none match.
+  const municipalityOptions = React.useMemo(() => {
+    const forRegion = municipalities.filter((m) => m.region === form.region);
+    return forRegion.length > 0 ? forRegion : municipalities;
+  }, [municipalities, form.region]);
+
+  const selectMunicipality = (id: string) => {
+    set("municipalityId", id);
+    const m = municipalities.find((x) => x.id === id);
+    if (m) {
+      set("city", m.name);
+      const c = { emergencyServices: m.emergencyServices, civilDefense: m.civilDefense };
+      setContacts(c);
+      savedContactsRef.current = c;
+    }
+  };
+
+  const saveContacts = async () => {
+    if (readOnly || !form.municipalityId) return;
+    if (
+      contacts.emergencyServices === savedContactsRef.current.emergencyServices &&
+      contacts.civilDefense === savedContactsRef.current.civilDefense
+    ) {
+      return; // nothing changed
+    }
+    setContactsSaving(true);
+    try {
+      const res = await fetch(`${CONTACTS_API_BASE}/api/municipalities/${form.municipalityId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(contacts),
+      });
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        toast(json.error ?? t("stations.contactsSaveFailed"), "info");
+        return;
+      }
+      savedContactsRef.current = contacts;
+      toast(t("stations.contactsSaved"));
+    } finally {
+      setContactsSaving(false);
+    }
+  };
+
   const lat = parseFloat(form.lat);
   const lng = parseFloat(form.lng);
   const hasCoords = form.lat.trim() !== "" && form.lng.trim() !== "" && !Number.isNaN(lat) && !Number.isNaN(lng);
   const inLibya = hasCoords && isInLibya(lat, lng);
   const coordsInvalid = hasCoords && !inLibya;
 
-  const stationId = initial?.code ?? hashCode(form.name || "new");
+  // The station's real id is the backend-generated UUID (present only in edit
+  // mode). `previewCode` is a short cosmetic code for the public-preview card.
+  const stationRecordId = initial?.id ?? "";
+  const previewCode = initial?.code ?? hashCode(form.name || "new");
   const selectedSensors = SENSORS.filter((s) => form.sensors[s]);
-  const canSave = form.name.trim() !== "" && form.nameAr.trim() !== "" && !coordsInvalid && selectedSensors.length > 0;
+  const canSave =
+    form.name.trim() !== "" &&
+    form.nameAr.trim() !== "" &&
+    form.municipalityId !== "" &&
+    hasCoords &&
+    !coordsInvalid &&
+    selectedSensors.length > 0;
 
   // Public preview reflects only what's been entered so far — no live reading
   // exists until the station is activated, so the summary card's weather
@@ -166,21 +290,86 @@ export function StationForm({
     () => ({
       name: form.name.trim() || "—",
       nameAr: form.nameAr.trim() || undefined,
-      code: stationId,
+      code: previewCode,
       region: form.region,
       city: form.city.trim() || form.name.trim().split(/\s+/)[0],
       availability: "live",
       updated: "preview",
     }),
-    [form, stationId],
+    [form, previewCode],
   );
-  const cityContacts = contactsForCity(form.city);
 
-  const save = () => {
-    if (!canSave) return;
-    if (mode === "edit") toast(t("stations.savedToast", { name: form.name.trim() }));
-    else toast(t("stations.addedToast", { name: form.name.trim(), region: t("region." + form.region) }));
-    router.push("/stations");
+  const save = async () => {
+    if (!canSave || saving || readOnly) return;
+    setSaving(true);
+    try {
+      const sensors = sensorsToParams(selectedSensors);
+      // Form status → backend operational_status ("offline" is a UI convenience
+      // that maps onto the backend's "deactivated").
+      const operationalStatus =
+        form.status === "offline" ? "deactivated" : (form.status as "active" | "maintenance");
+
+      if (mode === "create") {
+        const res = await fetch(`${CONTACTS_API_BASE}/api/stations`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            municipality_id: form.municipalityId,
+            wu_station_id: form.wuStationId.trim() || null,
+            name: form.name.trim(),
+            name_ar: form.nameAr.trim(),
+            station_type: "",
+            latitude: lat,
+            longitude: lng,
+            elevation: 0,
+            sensors,
+            report_interval_minutes: parseInt(form.interval, 10),
+          }),
+        });
+        const json = (await res.json().catch(() => ({}))) as { error?: string; data?: { id?: string } };
+        if (!res.ok) {
+          toast(json.error ?? t("stations.saveFailed"), "info");
+          return;
+        }
+        // Create can't set operational_status; apply a non-active choice after.
+        if (json.data?.id && operationalStatus !== "active") {
+          await fetch(`${CONTACTS_API_BASE}/api/stations/${json.data.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ operational_status: operationalStatus }),
+          });
+        }
+        toast(t("stations.addedToast", { name: form.name.trim(), region: t("region." + form.region) }));
+        router.push("/stations");
+        router.refresh();
+      } else {
+        const res = await fetch(`${CONTACTS_API_BASE}/api/stations/${stationRecordId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            municipality_id: form.municipalityId,
+            wu_station_id: form.wuStationId.trim() || null,
+            name: form.name.trim(),
+            name_ar: form.nameAr.trim(),
+            latitude: lat,
+            longitude: lng,
+            sensors,
+            report_interval_minutes: parseInt(form.interval, 10),
+            operational_status: operationalStatus,
+          }),
+        });
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) {
+          toast(json.error ?? t("stations.saveFailed"), "info");
+          return;
+        }
+        toast(t("stations.savedToast", { name: form.name.trim() }));
+        router.push("/stations");
+        router.refresh();
+      }
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -197,7 +386,7 @@ export function StationForm({
           <Button variant="outline" asChild>
             <Link href="/stations">{t("common.cancel")}</Link>
           </Button>
-          <Button onClick={save} disabled={!canSave}>
+          <Button onClick={save} disabled={!canSave || saving || readOnly}>
             <Check className="size-4" />
             {t("stations.saveActivate")}
           </Button>
@@ -245,18 +434,43 @@ export function StationForm({
                     </SelectContent>
                   </Select>
                 </Field>
-                <Field label={t("stations.city")} htmlFor="st-city">
-                  <Input
-                    id="st-city"
-                    value={form.city}
-                    onChange={(e) => set("city", e.target.value)}
-                    placeholder={t("stations.cityPlaceholder")}
-                  />
+                <Field label={t("stations.city")} htmlFor="st-municipality">
+                  <Select
+                    value={form.municipalityId}
+                    onValueChange={selectMunicipality}
+                    disabled={readOnly}
+                  >
+                    <SelectTrigger id="st-municipality" className="w-full">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <MapPin className="size-4 shrink-0 text-muted-foreground" />
+                        <SelectValue placeholder={t("stations.cityPlaceholder")} />
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {municipalityOptions.length === 0 ? (
+                        <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                          {t("stations.noMunicipalities")}
+                        </div>
+                      ) : (
+                        municipalityOptions.map((m) => (
+                          <SelectItem key={m.id} value={m.id}>
+                            {locale === "ar" ? m.nameAr || m.name : m.name}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
                 </Field>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label={t("stations.stationId")} htmlFor="st-id">
-                  <Input id="st-id" value={stationId} readOnly dir="ltr" className="bg-secondary/60 text-muted-foreground" />
+                <Field label={t("stations.wuStationId")} htmlFor="st-wu">
+                  <Input
+                    id="st-wu"
+                    dir="ltr"
+                    value={form.wuStationId}
+                    onChange={(e) => set("wuStationId", e.target.value)}
+                    placeholder={t("stations.wuStationIdPlaceholder")}
+                  />
                 </Field>
                 <Field label={t("stations.initialStatus")} htmlFor="st-status">
                   <Select value={form.status} onValueChange={(v) => set("status", v as StationInitialStatus)}>
@@ -269,6 +483,16 @@ export function StationForm({
                   </Select>
                 </Field>
               </div>
+              <Field label={t("stations.stationId")} htmlFor="st-id">
+                <Input
+                  id="st-id"
+                  value={mode === "edit" ? stationRecordId : ""}
+                  readOnly
+                  dir="ltr"
+                  placeholder={mode === "create" ? t("stations.stationIdAuto") : undefined}
+                  className="bg-secondary/60 font-mono text-xs text-muted-foreground"
+                />
+              </Field>
             </div>
           </Card>
 
@@ -356,21 +580,29 @@ export function StationForm({
             </div>
           </Card>
 
-          {/* Emergency contacts — per city, shared by all stations in it */}
+          {/* Emergency contacts — per municipality (city), shared by all its
+              stations. Saved to the backend on blur; readOnly can only view. */}
           <Card className="p-6">
             <SectionHead
               title={t("stations.section.emergency")}
-              hint={form.city.trim() ? t("stations.emergencySharedHint", { city: form.city.trim() }) : undefined}
+              hint={
+                form.municipalityId
+                  ? t("stations.emergencySharedHint", { city: form.city.trim() })
+                  : t("stations.emergencyPickHint")
+              }
             />
-            {form.city.trim() ? (
+            {form.municipalityId ? (
               <div className="mt-5 grid gap-4 sm:grid-cols-2">
                 <Field label={t("stations.emergencyServices")} htmlFor="st-emr-services">
                   <Input
                     id="st-emr-services"
                     dir="ltr"
                     inputMode="tel"
-                    value={cityContacts.emergencyServices}
-                    onChange={(e) => setCityContacts(form.city, { ...cityContacts, emergencyServices: e.target.value })}
+                    readOnly={readOnly}
+                    disabled={contactsSaving}
+                    value={contacts.emergencyServices}
+                    onChange={(e) => setContacts((c) => ({ ...c, emergencyServices: e.target.value }))}
+                    onBlur={saveContacts}
                   />
                 </Field>
                 <Field label={t("stations.civilDefense")} htmlFor="st-emr-civil">
@@ -378,8 +610,11 @@ export function StationForm({
                     id="st-emr-civil"
                     dir="ltr"
                     inputMode="tel"
-                    value={cityContacts.civilDefense}
-                    onChange={(e) => setCityContacts(form.city, { ...cityContacts, civilDefense: e.target.value })}
+                    readOnly={readOnly}
+                    disabled={contactsSaving}
+                    value={contacts.civilDefense}
+                    onChange={(e) => setContacts((c) => ({ ...c, civilDefense: e.target.value }))}
+                    onBlur={saveContacts}
                   />
                 </Field>
               </div>

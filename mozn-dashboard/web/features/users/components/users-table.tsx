@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import {
   Building2,
   Check,
@@ -8,7 +9,6 @@ import {
   EyeOff,
   Lock,
   Mail,
-  MapPin,
   MoreHorizontal,
   Pencil,
   Phone,
@@ -71,9 +71,16 @@ import { TablePagination } from "@/components/data-table/table-pagination";
 import { usePagination } from "@/hooks/use-pagination";
 import { DotBadge, RoleBadge } from "@/components/common/status-badges";
 import { EmptyState } from "@/components/common/empty-state";
-import type { UserRole, UserRow, UsersPage } from "@/features/users/types";
+import { useRole } from "@/components/providers/role-provider";
+import type {
+  RegionOption,
+  RoleOption,
+  UserRole,
+  UserRow,
+  UsersPage,
+} from "@/features/users/types";
 
-const ROLES: UserRole[] = ["Super Admin", "Gov Editor", "Gov Viewer"];
+const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 type SortKey = "user" | "role" | "regions" | "lastActive" | "status";
 
@@ -90,25 +97,16 @@ function recencyMinutes(label: string): number {
   return n * mult;
 }
 
-function initialsOf(name: string): string {
-  return (
-    name
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((w) => w[0]?.toUpperCase() ?? "")
-      .join("") || "U"
-  );
-}
-
 type Draft = {
   name: string;
   email: string;
   phone: string;
   organization: string;
   password: string;
-  role: UserRole;
-  regions: string;
+  /** Real backend role name (admin, gov_editor, …). */
+  roleName: string;
+  /** Assigned region UUIDs. */
+  regionIds: string[];
 };
 
 const EMPTY_DRAFT: Draft = {
@@ -117,11 +115,13 @@ const EMPTY_DRAFT: Draft = {
   phone: "",
   organization: "",
   password: "",
-  role: "Gov Viewer",
-  regions: "",
+  roleName: "viewer",
+  regionIds: [],
 };
 
-const MIN_PASSWORD = 8;
+// Matches the backend's registerRequest (min 12) so the client blocks early
+// instead of round-tripping a guaranteed 400.
+const MIN_PASSWORD = 12;
 
 // Roles that can manage a region's stations/alerts (A4.1 sole-editor guard).
 const EDITOR_ROLES = new Set<UserRole>(["Super Admin", "Gov Editor"]);
@@ -159,15 +159,24 @@ function orphanedRegions(target: UserRow, rows: UserRow[]): string[] {
 
 export function UsersTable({
   page,
+  roleOptions: backendRoles,
+  regionOptions,
   openCreateRef,
 }: {
   page: UsersPage;
+  /** Real backend roles for the assignment dropdown. */
+  roleOptions: RoleOption[];
+  /** Regions for the assignment multi-select. */
+  regionOptions: RegionOption[];
   /** Lets a parent (the tab header) trigger the create dialog from outside the table. */
   openCreateRef?: React.MutableRefObject<(() => void) | null>;
 }) {
   const t = useT();
   const td = useTD();
-  const [rows, setRows] = React.useState<UserRow[]>(page.users);
+  const router = useRouter();
+  const { readOnly } = useRole();
+  // Server data is the source of truth; after each write we router.refresh().
+  const rows = page.users;
   const [roles, setRoles] = React.useState<string[]>([]);
   const [query, setQuery] = React.useState("");
   // Single dialog reused for create + edit. `editingId` null means "create".
@@ -175,11 +184,11 @@ export function UsersTable({
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [draft, setDraft] = React.useState<Draft>(EMPTY_DRAFT);
   const [showPassword, setShowPassword] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
   const [sort, setSort] = React.useState<SortState<SortKey>>({ key: "lastActive", dir: "asc" });
   const onSort = (key: SortKey) => setSort((prev) => nextSort(prev, key));
   const [density, setDensity] = React.useState<Density>("comfortable");
   const rowPad = rowPadFor(density);
-  const newIdRef = React.useRef(0);
 
   // Distinguish "filters exclude everyone" from "no users at all" so the empty
   // state can say the right thing (and offer Clear filters).
@@ -214,56 +223,70 @@ export function UsersTable({
       phone: user.phone ?? "",
       organization: user.organization ?? "",
       password: "",
-      role: user.role,
-      regions: user.regions,
+      roleName: user.roleName,
+      regionIds: user.regionIds,
     });
     setShowPassword(false);
     setDialogOpen(true);
   };
 
-  const submitDraft = () => {
+  const submitDraft = async () => {
+    if (readOnly || saving) return;
     const name = draft.name.trim();
     const email = draft.email.trim();
     if (!name || !email) {
       toast(t("users.toastNameEmailRequired"), "info");
       return;
     }
-    // New accounts need a starting password; on edit it's optional (blank = keep).
+    // New accounts need a starting password; the backend can't change it on edit.
     if (!editingId && draft.password.length < MIN_PASSWORD) {
       toast(t("users.toastPasswordMin", { n: MIN_PASSWORD }), "info");
       return;
     }
-    const phone = draft.phone.trim();
-    const organization = draft.organization.trim();
-    if (editingId) {
-      setRows((prev) =>
-        prev.map((u) =>
-          u.id === editingId
-            ? { ...u, name, email, phone, organization, role: draft.role, regions: draft.regions.trim() || "—", initials: initialsOf(name) }
-            : u,
-        ),
-      );
-      toast(t("users.toastSaved", { name }));
-    } else {
-      const id = `u-new-${++newIdRef.current}`;
-      setRows((prev) => [
-        {
-          id,
-          name,
-          email,
-          phone,
-          organization,
-          initials: initialsOf(name),
-          role: draft.role,
-          regions: draft.regions.trim() || "—",
-          lastActive: "Active now",
-          active: true,
-        },
-        ...prev,
-      ]);
-      toast(t("users.toastAdded", { name }));
+    setSaving(true);
+    try {
+      if (editingId) {
+        const role = backendRoles.find((r) => r.name === draft.roleName);
+        const res = await fetch(`${BASE}/api/users/${editingId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            role_id: role?.id,
+            phone: draft.phone.trim(),
+            organization: draft.organization.trim(),
+            region_ids: draft.regionIds,
+          }),
+        });
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) {
+          toast(json.error ?? t("users.saveFailed"), "info");
+          return;
+        }
+        toast(t("users.toastSaved", { name }));
+      } else {
+        const res = await fetch(`${BASE}/api/users`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name,
+            email,
+            password: draft.password,
+            role_name: draft.roleName || "viewer",
+            region_ids: draft.regionIds,
+          }),
+        });
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) {
+          toast(json.error ?? t("users.saveFailed"), "info");
+          return;
+        }
+        toast(t("users.toastAdded", { name }));
+      }
+      setDialogOpen(false);
+      router.refresh();
+    } finally {
+      setSaving(false);
     }
-    setDialogOpen(false);
   };
 
   // Sole-editor guard: deactivating an editor that's the last cover for a
@@ -273,15 +296,23 @@ export function UsersTable({
     regions: string[];
   } | null>(null);
 
-  const performToggle = (user: UserRow) => {
-    setRows((prev) =>
-      prev.map((u) => (u.id === user.id ? { ...u, active: !u.active } : u)),
-    );
+  const performToggle = async (user: UserRow) => {
+    const res = await fetch(`${BASE}/api/users/${user.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_active: !user.active }),
+    });
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    if (!res.ok) {
+      toast(json.error ?? t("users.saveFailed"), "info");
+      return;
+    }
     toast(
       user.active
         ? t("users.toastDeactivated", { name: td(user.name) })
         : t("users.toastActivated", { name: td(user.name) }),
     );
+    router.refresh();
   };
 
   const toggleActive = (user: UserRow) => {
@@ -295,9 +326,15 @@ export function UsersTable({
     performToggle(user);
   };
 
-  const removeUser = (user: UserRow) => {
-    setRows((prev) => prev.filter((u) => u.id !== user.id));
+  const removeUser = async (user: UserRow) => {
+    const res = await fetch(`${BASE}/api/users/${user.id}`, { method: "DELETE" });
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    if (!res.ok) {
+      toast(json.error ?? t("users.saveFailed"), "info");
+      return;
+    }
     toast(t("users.toastRemoved", { name: td(user.name) }));
+    router.refresh();
   };
 
   const visible = React.useMemo(() => {
@@ -591,7 +628,8 @@ export function UsersTable({
                   onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
                   placeholder={t("users.namePlaceholder")}
                   autoComplete="off"
-                  autoFocus
+                  autoFocus={!editingId}
+                  disabled={editingId !== null}
                 />
               </div>
             </div>
@@ -609,84 +647,92 @@ export function UsersTable({
                   onChange={(e) => setDraft((d) => ({ ...d, email: e.target.value }))}
                   placeholder={t("users.emailPlaceholder")}
                   autoComplete="off"
+                  disabled={editingId !== null}
                 />
               </div>
             </div>
-            <div className="grid gap-2">
-              <label htmlFor="user-password" className="text-sm font-medium text-foreground">
-                {editingId ? (
-                  <>
-                    {t("users.fieldPassword")}{" "}
-                    <span className="font-normal text-muted-foreground">
-                      {t("users.passwordKeepHint")}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    {t("users.fieldPassword")} <span className="text-destructive">*</span>
-                  </>
-                )}
-              </label>
-              <div className="relative">
-                <Lock className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="user-password"
-                  type={showPassword ? "text" : "password"}
-                  className="ps-9 pe-10"
-                  value={draft.password}
-                  onChange={(e) => setDraft((d) => ({ ...d, password: e.target.value }))}
-                  placeholder={editingId ? "••••••••" : t("users.passwordPlaceholder", { n: MIN_PASSWORD })}
-                  autoComplete="new-password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((s) => !s)}
-                  className="absolute end-1.5 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label={showPassword ? t("users.hidePassword") : t("users.showPassword")}
-                  aria-pressed={showPassword}
-                >
-                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                </button>
+            {editingId ? (
+              <p className="rounded-lg border border-border-subtle bg-secondary/40 px-3 py-2 text-xs text-muted-foreground">
+                {t("users.editIdentityHint")}
+              </p>
+            ) : (
+              <div className="grid gap-2">
+                <label htmlFor="user-password" className="text-sm font-medium text-foreground">
+                  {t("users.fieldPassword")} <span className="text-destructive">*</span>
+                </label>
+                <div className="relative">
+                  <Lock className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="user-password"
+                    type={showPassword ? "text" : "password"}
+                    className="ps-9 pe-10"
+                    value={draft.password}
+                    onChange={(e) => setDraft((d) => ({ ...d, password: e.target.value }))}
+                    placeholder={t("users.passwordPlaceholder", { n: MIN_PASSWORD })}
+                    autoComplete="new-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((s) => !s)}
+                    className="absolute end-1.5 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label={showPassword ? t("users.hidePassword") : t("users.showPassword")}
+                    aria-pressed={showPassword}
+                  >
+                    {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="grid gap-2">
                 <label htmlFor="user-role" className="text-sm font-medium text-foreground">
                   {t("users.fieldRole")}
                 </label>
                 <Select
-                  value={draft.role}
-                  onValueChange={(v) => setDraft((d) => ({ ...d, role: v as UserRole }))}
+                  value={draft.roleName}
+                  onValueChange={(v) => setDraft((d) => ({ ...d, roleName: v }))}
                 >
                   <SelectTrigger id="user-role" className="w-full">
                     <div className="flex min-w-0 items-center gap-2">
                       <ShieldCheck className="size-4 shrink-0 text-muted-foreground" />
-                      <SelectValue />
+                      <SelectValue placeholder={t("users.fieldRole")} />
                     </div>
                   </SelectTrigger>
                   <SelectContent>
-                    {ROLES.map((r) => (
-                      <SelectItem key={r} value={r}>
-                        {t("role." + r)}
+                    {backendRoles.map((r) => (
+                      <SelectItem key={r.id} value={r.name}>
+                        {r.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="grid gap-2">
-                <label htmlFor="user-regions" className="text-sm font-medium text-foreground">
+                <label className="text-sm font-medium text-foreground">
                   {t("users.fieldRegions")}
                 </label>
-                <div className="relative">
-                  <MapPin className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    id="user-regions"
-                    className="ps-9"
-                    value={draft.regions}
-                    onChange={(e) => setDraft((d) => ({ ...d, regions: e.target.value }))}
-                    placeholder={t("users.regionsPlaceholder")}
-                    autoComplete="off"
-                  />
+                <div className="flex flex-wrap gap-x-4 gap-y-2 rounded-lg border border-border-subtle bg-secondary/30 p-3">
+                  {regionOptions.length === 0 ? (
+                    <span className="text-sm text-muted-foreground">{t("users.noRegions")}</span>
+                  ) : (
+                    regionOptions.map((rg) => (
+                      <label key={rg.id} className="flex items-center gap-2 text-sm text-foreground">
+                        <Checkbox
+                          checked={draft.regionIds.includes(rg.id)}
+                          onCheckedChange={(v) =>
+                            setDraft((d) => ({
+                              ...d,
+                              regionIds:
+                                v === true
+                                  ? [...d.regionIds, rg.id]
+                                  : d.regionIds.filter((x) => x !== rg.id),
+                            }))
+                          }
+                        />
+                        {td(rg.name)}
+                      </label>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
@@ -746,6 +792,8 @@ export function UsersTable({
               type="submit"
               form="user-form"
               disabled={
+                saving ||
+                readOnly ||
                 !draft.name.trim() ||
                 !draft.email.trim() ||
                 (!editingId && draft.password.length < MIN_PASSWORD)

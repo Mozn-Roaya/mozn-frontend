@@ -74,6 +74,33 @@ export const alertTemplates: Record<string, Entry> = {
     ar: "مثال: تحذير من فيضان مفاجئ في {region}. اتجه إلى مكان مرتفع الآن.",
   },
   "templates.savedToast": { en: "Template saved", ar: "تم حفظ القالب" },
+  "templates.saveFailed": {
+    en: "Couldn’t save the template. Please try again.",
+    ar: "تعذّر حفظ القالب. حاول مرة أخرى.",
+  },
+  "templates.deleteFailed": {
+    en: "Couldn’t delete the template. Please try again.",
+    ar: "تعذّر حذف القالب. حاول مرة أخرى.",
+  },
+  "templates.saveIncomplete": {
+    en: "Fill in all four message versions before saving.",
+    ar: "أكمل نسخ الرسالة الأربع قبل الحفظ.",
+  },
+  "templates.stepsRequired": {
+    en: "Add at least one response step in both English and Arabic before saving.",
+    ar: "أضف خطوة استجابة واحدة على الأقل بالإنجليزية والعربية قبل الحفظ.",
+  },
+  "templates.createdToast": { en: "Template created", ar: "تم إنشاء القالب" },
+
+  // Create dialog
+  "templates.create.title": { en: "New alert template", ar: "قالب تنبيه جديد" },
+  "templates.create.desc": {
+    en: "Pick the event and severity, then write all four message versions and at least one response step.",
+    ar: "اختر الحدث والخطورة، ثم اكتب نسخ الرسالة الأربع وخطوة استجابة واحدة على الأقل.",
+  },
+  "templates.create.eventLabel": { en: "Event type", ar: "نوع الحدث" },
+  "templates.create.severityLabel": { en: "Severity", ar: "الخطورة" },
+  "templates.create.submit": { en: "Create template", ar: "إنشاء القالب" },
 
   // Preview
   "templates.preview": { en: "Preview", ar: "معاينة" },

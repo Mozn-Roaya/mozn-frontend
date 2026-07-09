@@ -3,8 +3,17 @@ import { AlertHistoryView } from "@/features/history/components/alert-history-vi
 
 export const dynamic = "force-dynamic";
 
-export default async function HistoryPageRoute() {
-  const alerts = await getAlertHistory();
+const RANGES = ["24h", "7d", "30d", "90d"];
 
-  return <AlertHistoryView page={alerts} />;
+export default async function HistoryPageRoute({
+  searchParams,
+}: {
+  searchParams: Promise<{ range?: string }>;
+}) {
+  const sp = await searchParams;
+  const range = sp.range && RANGES.includes(sp.range) ? sp.range : "7d";
+  // The from/to window is computed inside getAlertHistory (server adapter).
+  const alerts = await getAlertHistory({ range });
+
+  return <AlertHistoryView page={alerts} range={range} />;
 }

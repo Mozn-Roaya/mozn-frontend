@@ -8,10 +8,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useT } from "@/components/providers/locale-provider";
 import { UsersTable } from "./users-table";
 import { RolePermissions } from "./role-permissions";
-import type { UsersPage } from "@/features/users/types";
+import type { RegionOption, UsersPage } from "@/features/users/types";
+import type { RoleMatrix } from "@/types/roles";
 
 /** Users & Access hub: the user list (A4.0/A4.1) and the role matrix (A4.2). */
-export function UsersAccessTabs({ page }: { page: UsersPage }) {
+export function UsersAccessTabs({
+  page,
+  roleMatrix,
+  regionOptions,
+}: {
+  page: UsersPage;
+  roleMatrix: RoleMatrix;
+  regionOptions: RegionOption[];
+}) {
   const t = useT();
   const [tab, setTab] = React.useState("list");
   // The "Add user" action lives here, outside the table Card, so it sits with
@@ -35,11 +44,16 @@ export function UsersAccessTabs({ page }: { page: UsersPage }) {
       </div>
 
       <TabsContent value="list" className="flex min-h-0 flex-1 flex-col">
-        <UsersTable page={page} openCreateRef={openCreateRef} />
+        <UsersTable
+          page={page}
+          roleOptions={roleMatrix.roles}
+          regionOptions={regionOptions}
+          openCreateRef={openCreateRef}
+        />
       </TabsContent>
 
       <TabsContent value="roles">
-        <RolePermissions />
+        <RolePermissions matrix={roleMatrix} />
       </TabsContent>
     </Tabs>
   );

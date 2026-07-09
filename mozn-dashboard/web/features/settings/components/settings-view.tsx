@@ -14,6 +14,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { useTheme } from "next-themes";
+import { useRouter } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -52,6 +53,7 @@ import { cn } from "@/lib/utils";
 import type { Locale } from "@/lib/i18n";
 import { useMounted } from "@/hooks/use-mounted";
 import { useLocale } from "@/components/providers/locale-provider";
+import { useRole } from "@/components/providers/role-provider";
 import type { SettingsPage, ValidationRule } from "@/features/settings/types";
 import {
   DEFAULT_PREFERENCES,
@@ -60,6 +62,11 @@ import {
   savePreferences,
   type SettingsPreferences,
 } from "@/features/settings/preferences";
+
+// Writes go through the same-origin route handlers (app/api/settings and
+// app/api/validation-rules); BASE prefixes them when the app is served under a
+// sub-path, matching users-table / stations-table.
+const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 // Settings for the MOZN Early Warning System console. Appearance (theme +
 // language) applies live through its own providers; the operational sections —
@@ -190,6 +197,8 @@ function NumberField({
 export function SettingsView({ page }: { page: SettingsPage }) {
   const { t, td, locale, setLocale } = useLocale();
   const { theme, setTheme } = useTheme();
+  const router = useRouter();
+  const { readOnly } = useRole();
 
   // Minutes unit that agrees with the count: Arabic uses the plural "دقائق" for
   // 3–10 and the singular "دقيقة" otherwise; English "min" is invariant.
@@ -244,11 +253,38 @@ export function SettingsView({ page }: { page: SettingsPage }) {
     setDirty(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (readOnly) return;
+    // Operational preferences (units, SLA, thresholds, refresh, region, …) have
+    // no backend keys — persist them to localStorage exactly as before.
     savePreferences(prefs);
+
+    // Notification toggles ARE backed by real backend setting keys
+    // (page.notifications[].id). Diff against the initial server state and PUT
+    // only the toggles that changed to /api/settings.
+    let firstError: string | null = null;
+    for (const notif of page.notifications) {
+      const next = prefs.notif[notif.id] ?? false;
+      if (next === notif.enabled) continue;
+      const res = await fetch(`${BASE}/api/settings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: notif.id, value: next ? "true" : "false" }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok && firstError === null) firstError = json.error ?? t("settings.saveFailed");
+    }
+
+    if (firstError) {
+      // Keep the Save bar (dirty) so the user can retry the failed toggle(s).
+      toast(firstError, "info");
+      return;
+    }
+
     savedRef.current = prefs;
     setDirty(false);
     toast(t("settings.saved"));
+    router.refresh();
   };
   const handleDiscard = () => {
     setPrefs(savedRef.current);
@@ -336,6 +372,7 @@ export function SettingsView({ page }: { page: SettingsPage }) {
                     <Switch
                       checked={prefs.notif[pref.id] ?? false}
                       onCheckedChange={(v) => setNotif(pref.id, v)}
+                      disabled={readOnly}
                       aria-label={td(pref.title)}
                     />
                   </Row>
@@ -459,6 +496,7 @@ export function SettingsView({ page }: { page: SettingsPage }) {
                               size="icon"
                               className="size-8"
                               onClick={() => setEditingRule(rule)}
+                              disabled={readOnly}
                               aria-label={t("settings.table.edit")}
                             >
                               <Pencil className="size-4 text-muted-foreground" />
@@ -597,7 +635,7 @@ export function SettingsView({ page }: { page: SettingsPage }) {
             <Button variant="ghost" size="sm" onClick={handleDiscard}>
               {t("settings.discard")}
             </Button>
-            <Button size="sm" onClick={handleSave}>
+            <Button size="sm" onClick={handleSave} disabled={readOnly}>
               <Check className="size-4" />
               {t("common.save")}
             </Button>
@@ -609,10 +647,29 @@ export function SettingsView({ page }: { page: SettingsPage }) {
         <ValidationRuleDialog
           rule={editingRule}
           onOpenChange={(open) => !open && setEditingRule(null)}
-          onSave={(next) => {
-            setRules((prev) => prev.map((r) => (r.metric === editingRule.metric ? next : r)));
+          onSave={async (next) => {
+            if (readOnly) return;
+            // Persist the structured numeric bounds (null clears a bound). The
+            // rule's "active" flag has no backend field, so it is not sent.
+            const res = await fetch(`${BASE}/api/validation-rules/${next.id}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                valid_range_min: next.validRangeMin,
+                valid_range_max: next.validRangeMax,
+                max_rate_of_change: next.maxRateOfChange,
+                rate_interval_min: next.rateIntervalMin,
+              }),
+            });
+            const json = (await res.json().catch(() => ({}))) as { error?: string };
+            if (!res.ok) {
+              toast(json.error ?? t("settings.saveFailed"), "info");
+              return;
+            }
+            setRules((prev) => prev.map((r) => (r.id === next.id ? next : r)));
             toast(t("settings.validation.saved"));
             setEditingRule(null);
+            router.refresh();
           }}
         />
       ) : null}
@@ -703,8 +760,26 @@ function ValidationRuleDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const { t, td } = useLocale();
-  const [range, setRange] = React.useState<RangeParts>(() => parseRange(rule.validRange));
-  const [rate, setRate] = React.useState<RateParts>(() => parseRate(rule.maxRate));
+  // Seed the numeric inputs from the structured backend fields (authoritative);
+  // the unit label has no numeric field, so it still comes from the display
+  // string. Fall back to the parsed value when a structured field is null.
+  const [range, setRange] = React.useState<RangeParts>(() => {
+    const parsed = parseRange(rule.validRange);
+    return {
+      min: rule.validRangeMin != null ? String(rule.validRangeMin) : parsed.min,
+      max: rule.validRangeMax != null ? String(rule.validRangeMax) : parsed.max,
+      unit: parsed.unit,
+    };
+  });
+  const [rate, setRate] = React.useState<RateParts>(() => {
+    const parsed = parseRate(rule.maxRate);
+    return {
+      enabled: rule.maxRateOfChange != null,
+      delta: rule.maxRateOfChange != null ? String(rule.maxRateOfChange) : parsed.delta,
+      unit: parsed.unit,
+      window: rule.rateIntervalMin != null ? String(rule.rateIntervalMin) : parsed.window,
+    };
+  });
   const [ruleActive, setRuleActive] = React.useState(rule.active);
 
   // The rate's unit is preserved from the original string. When a rule that had
@@ -720,11 +795,19 @@ function ValidationRuleDialog({
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            // Send structured numbers, not the parsed display strings. An empty
+            // bound or a disabled rate clears that field (null). `active` has no
+            // backend field — it stays display-only and is not persisted.
+            const num = (v: string) => (v.trim() === "" ? null : Number(v));
             onSave({
               ...rule,
               validRange: formatRange(range),
               maxRate: formatRate(rate),
               active: ruleActive,
+              validRangeMin: num(range.min),
+              validRangeMax: num(range.max),
+              maxRateOfChange: rate.enabled ? num(rate.delta) : null,
+              rateIntervalMin: rate.enabled ? num(rate.window) : null,
             });
           }}
         >

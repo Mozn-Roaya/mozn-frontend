@@ -86,4 +86,5 @@ export const alertInbox: Record<string, Entry> = {
     ar: "تمت جدولة الصيانة · 4 ساعات",
   },
   "inbox.toast.dismissed": { en: "Alert dismissed", ar: "تم تجاهل التنبيه" },
+  "inbox.toast.failed": { en: "Action failed", ar: "فشل الإجراء" },
 };
