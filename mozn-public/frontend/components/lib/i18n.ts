@@ -201,8 +201,8 @@ const EN = {
   fieldTemperature: "Temperature",
   fieldHumidity: "Humidity",
   fieldRainfall: "Rainfall",
-  fieldWaterLevel: "Water Level",
   fieldWindSpeed: "Wind Speed",
+  fieldPressure: "Pressure",
   fieldCoordinates: "Coordinates",
 };
 
@@ -383,8 +383,8 @@ const AR: Dict = {
   fieldTemperature: "درجة الحرارة",
   fieldHumidity: "الرطوبة",
   fieldRainfall: "هطول الأمطار",
-  fieldWaterLevel: "منسوب المياه",
   fieldWindSpeed: "سرعة الرياح",
+  fieldPressure: "الضغط الجوي",
   fieldCoordinates: "الإحداثيات",
 };
 

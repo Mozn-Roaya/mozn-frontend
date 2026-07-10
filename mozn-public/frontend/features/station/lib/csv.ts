@@ -1,12 +1,13 @@
-import type { Reading, Station } from "@/components/api/types";
+import type { ReadingHistoryBucket, Station } from "@/components/api/types";
 
-/** Which reading columns the export includes. */
+/** Which reading columns the export includes. Backed by the hourly aggregate,
+ *  so temperature/wind/rain expand into their avg/min/max/total sub-columns. */
 export type IncludeKey =
   | "temperature"
   | "humidity"
   | "rainfall"
-  | "waterLevel"
   | "windSpeed"
+  | "pressure"
   | "coordinates";
 
 function csvCell(v: string | number): string {
@@ -14,29 +15,32 @@ function csvCell(v: string | number): string {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
+/** Round to 2 decimals; blank for a missing bucket value (never fabricate 0). */
+function num(v: number | null | undefined): string {
+  return v == null ? "" : String(Math.round(v * 100) / 100);
+}
+
 export function buildCsv(
-  readings: Reading[],
+  buckets: ReadingHistoryBucket[],
   station: Station,
   include: Record<IncludeKey, boolean>,
 ): string {
-  const headers: string[] = ["Time"];
-  if (include.temperature) headers.push("Temperature (°C)");
-  if (include.humidity) headers.push("Humidity (%)");
-  if (include.rainfall) headers.push("Rainfall (mm/hr)");
-  // Water Level has no field in the readings API; the column is emitted (to
-  // honour the selection) but stays blank rather than showing fabricated data.
-  if (include.waterLevel) headers.push("Water Level");
-  if (include.windSpeed) headers.push("Wind Speed (km/h)");
+  const headers: string[] = ["Time (hour)"];
+  if (include.temperature) headers.push("Temp Avg (°C)", "Temp Min (°C)", "Temp Max (°C)");
+  if (include.humidity) headers.push("Humidity Avg (%)");
+  if (include.rainfall) headers.push("Rain Total (mm)", "Rain Rate Max (mm/hr)");
+  if (include.windSpeed) headers.push("Wind Max (km/h)", "Gust Max (km/h)");
+  if (include.pressure) headers.push("Pressure Avg (hPa)");
   if (include.coordinates) headers.push("Latitude", "Longitude");
 
   const lines = [headers.map(csvCell).join(",")];
-  for (const r of readings) {
-    const row: Array<string | number> = [r.time];
-    if (include.temperature) row.push(r.temp_c);
-    if (include.humidity) row.push(r.humidity);
-    if (include.rainfall) row.push(r.rain_rate_mm);
-    if (include.waterLevel) row.push("");
-    if (include.windSpeed) row.push(r.wind_speed_kmh);
+  for (const b of buckets) {
+    const row: Array<string | number> = [b.bucket_start];
+    if (include.temperature) row.push(num(b.temp_c_avg), num(b.temp_c_min), num(b.temp_c_max));
+    if (include.humidity) row.push(num(b.humidity_avg));
+    if (include.rainfall) row.push(num(b.rain_total_mm), num(b.rain_rate_max_mm));
+    if (include.windSpeed) row.push(num(b.wind_speed_max_kmh), num(b.wind_gust_max_kmh));
+    if (include.pressure) row.push(num(b.pressure_hpa_avg));
     if (include.coordinates) row.push(station.latitude, station.longitude);
     lines.push(row.map(csvCell).join(","));
   }

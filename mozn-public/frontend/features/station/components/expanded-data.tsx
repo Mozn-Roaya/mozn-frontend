@@ -9,34 +9,31 @@ import { useLang, useT } from "@/components/state/lang-context";
 
 import { buildCsv, triggerDownload, type IncludeKey } from "../lib/csv";
 
-import type { Reading, Station } from "@/components/api/types";
+import type { ReadingHistoryBucket, Station } from "@/components/api/types";
 
 // The station drives which readings are exported; period + column selection
 // are picked in-form. Readings are fetched fresh on download (sized to the
 // chosen period) rather than seeded from the server.
 
 type Format = "CSV" | "PDF" | "PNG";
-type Period = "24h" | "7d" | "30d" | "6mo" | "1yr";
+type Period = "24h" | "7d" | "30d";
 
-// Readings arrive at ~15-min intervals; row counts drive both the export size
-// and the meta line. 6mo/1yr are capped when actually fetching so a public
-// download can't pull an unbounded payload.
+// The export is hourly-bucketed, so one row per hour: bounded, deterministic
+// counts regardless of the raw ~2–5-min reporting cadence. A whole month is
+// ~720 rows — a single, cache-friendly request off the hourly aggregate.
 const ROWS_BY_PERIOD: Record<Period, number> = {
-  "24h": 96,
-  "7d": 672,
-  "30d": 2880,
-  "6mo": 17520,
-  "1yr": 35040,
+  "24h": 24,
+  "7d": 168,
+  "30d": 720,
 };
-const FETCH_CAP = 5000;
 
 function includeFields(t: Dict): Array<{ key: IncludeKey; label: string }> {
   return [
     { key: "temperature", label: t.fieldTemperature },
     { key: "humidity", label: t.fieldHumidity },
     { key: "rainfall", label: t.fieldRainfall },
-    { key: "waterLevel", label: t.fieldWaterLevel },
     { key: "windSpeed", label: t.fieldWindSpeed },
+    { key: "pressure", label: t.fieldPressure },
     { key: "coordinates", label: t.fieldCoordinates },
   ];
 }
@@ -54,8 +51,8 @@ export function ExpandedData({ station }: ExpandedDataProps) {
     temperature: true,
     humidity: true,
     rainfall: true,
-    waterLevel: true,
     windSpeed: true,
+    pressure: true,
     coordinates: true,
   });
   const [busy, setBusy] = React.useState(false);
@@ -75,16 +72,17 @@ export function ExpandedData({ station }: ExpandedDataProps) {
     setBusy(true);
     setError(null);
     try {
-      const pageSize = Math.min(rows, FETCH_CAP);
+      // Hourly export: bounded (≤720 rows for 30d) so it's always a single
+      // request off the hourly aggregate.
       const res = await fetch(
-        `/api/proxy/public/readings?station_id=${encodeURIComponent(
+        `/api/proxy/public/readings/export?station_id=${encodeURIComponent(
           station.id,
-        )}&page=1&page_size=${pageSize}`,
+        )}&range=${period}`,
       );
       if (!res.ok) throw new Error(`status ${res.status}`);
       const json = await res.json();
-      const readings: Reading[] = json.data ?? [];
-      const csv = buildCsv(readings, station, include);
+      const buckets: ReadingHistoryBucket[] = json.data ?? [];
+      const csv = buildCsv(buckets, station, include);
       triggerDownload(
         csv,
         `${station.wu_station_id || station.id}-readings-${period}.csv`,
@@ -121,7 +119,7 @@ export function ExpandedData({ station }: ExpandedDataProps) {
 
       <Section label={t.periodLabel}>
         <Segmented>
-          {(["24h", "7d", "30d", "6mo", "1yr"] as const).map((p) => (
+          {(["24h", "7d", "30d"] as const).map((p) => (
             <SegmentButton
               key={p}
               active={period === p}
