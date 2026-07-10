@@ -29,6 +29,7 @@ import { usePreferences } from "@/features/settings/use-preferences";
 import { convertWindMetric, tempSymbol, toTemp } from "@/lib/units";
 import type { TempUnit } from "@/features/settings/preferences";
 import { EmptyState } from "@/components/common/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { StationDetail } from "./station-detail";
 import type {
   ForecastDay,
@@ -377,6 +378,41 @@ function ForecastCard({ forecast, subtitle }: { forecast: ForecastDay[]; subtitl
   );
 }
 
+/** Placeholder shown while a live station's first reading is being fetched, so
+ * the panel doesn't flash the "no weather data" empty state before data lands.
+ * Mirrors the real layout: temperature card, 2×2 metric grid, forecast list. */
+function WeatherSkeleton() {
+  return (
+    <div className="flex flex-col gap-6" aria-hidden>
+      <Panel className="p-4">
+        <Skeleton className="h-4 w-24" />
+        <div className="mt-2 flex items-end justify-between">
+          <Skeleton className="h-14 w-28" />
+          <Skeleton className="h-8 w-20" />
+        </div>
+        <Skeleton className="mt-4 h-1.5 w-full rounded-full" />
+      </Panel>
+      <div className="grid grid-cols-2 gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Panel key={i} className="p-3.5">
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="mt-2.5 h-6 w-16" />
+            <Skeleton className="mt-2 h-3 w-24" />
+          </Panel>
+        ))}
+      </div>
+      <Panel className="px-3.5 pb-3 pt-4">
+        <Skeleton className="h-5 w-28" />
+        <div className="mt-3 space-y-2.5">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-6 w-full" />
+          ))}
+        </div>
+      </Panel>
+    </div>
+  );
+}
+
 /** Full station summary card (Figma "Station Summary"). */
 export function StationSummaryCard({
   detail: detailProp,
@@ -398,6 +434,10 @@ export function StationSummaryCard({
   // card stays a renderer otherwise; the builders (detailFrom*) carry no weather.
   const [weather, setWeather] = React.useState<Partial<StationDetail> | null>(null);
   const [forecast, setForecast] = React.useState<ForecastDay[] | null>(null);
+  // Which station's live reading has finished loading. Until it matches the
+  // current station, `loadingWeather` (below) is true and we show a skeleton
+  // instead of prematurely rendering the "no weather data" empty state.
+  const [loadedFor, setLoadedFor] = React.useState<string | null>(null);
   React.useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect -- data fetch on open: reset then fill from the API */
     if (!stationId || detailProp.availability !== "live") {
@@ -414,7 +454,12 @@ export function StationSummaryCard({
       .then((w) => {
         if (alive) setWeather(w && typeof w === "object" && !("error" in w) ? w : null);
       })
-      .catch(() => {});
+      .catch(() => {})
+      // Mark this station loaded whether the reading arrived, was empty, or the
+      // request failed — the skeleton gives way to real data or the empty state.
+      .finally(() => {
+        if (alive) setLoadedFor(stationId);
+      });
     fetch(`${base}/api/forecasts?station_id=${encodeURIComponent(stationId)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
@@ -426,6 +471,11 @@ export function StationSummaryCard({
     };
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [stationId, detailProp.availability]);
+
+  // A live station whose first reading hasn't resolved yet. Derived (not effect
+  // state) so switching stations flips it back to loading with no flash frame.
+  const loadingWeather =
+    Boolean(stationId) && detailProp.availability === "live" && loadedFor !== stationId;
 
   const detail = {
     ...detailProp,
@@ -485,6 +535,8 @@ export function StationSummaryCard({
             {t("dashboard.station.maintenanceDesc")}
           </p>
         </Panel>
+      ) : loadingWeather ? (
+        <WeatherSkeleton />
       ) : detail.temp == null ? (
         <EmptyState icon={CloudOff} message={t("dashboard.station.noData")} />
       ) : (
