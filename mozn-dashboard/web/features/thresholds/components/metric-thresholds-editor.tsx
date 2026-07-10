@@ -141,6 +141,29 @@ export function MetricThresholdsEditor({
   );
   const [selected, setSelected] = React.useState<ThresholdMetric>(metrics[0]?.metric);
 
+  // Re-seed local tier values (and keep `selected` valid) whenever the server
+  // data changes — e.g. after a create/delete/revert triggers router.refresh().
+  // Without this the editor keeps showing stale/phantom tiers and can read an
+  // undefined metric group (crash) when a newly-created metric appears. Keyed on
+  // a value signature, not the array identity, so an unrelated re-render never
+  // wipes in-progress edits.
+  const metricsSig = React.useMemo(
+    () =>
+      metrics
+        .map((m) => `${m.metric}:${m.tiers.map((tr) => `${tr.name}=${tr.value}`).join(",")}`)
+        .join("|"),
+    [metrics],
+  );
+  React.useEffect(() => {
+    // Intentional prop-sync: re-seed local editor state from the server data
+    // after a create/delete/revert triggers router.refresh().
+    /* eslint-disable react-hooks/set-state-in-effect */
+    setValues(Object.fromEntries(metrics.map((m) => [m.metric, toValues(m)])));
+    setSelected((cur) => (metrics.some((m) => m.metric === cur) ? cur : metrics[0]?.metric));
+    /* eslint-enable react-hooks/set-state-in-effect */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metricsSig]);
+
   // Create-threshold dialog (region + parameter + severity + value, with a
   // non-blocking impact preview) and per-tier delete confirmation.
   const [createOpen, setCreateOpen] = React.useState(false);
@@ -220,7 +243,10 @@ export function MetricThresholdsEditor({
   }
 
   const metric = metrics.find((m) => m.metric === selected) ?? metrics[0];
-  const v = values[selected];
+  if (!metric) return null;
+  // Fall back to the metric's server values if the local map hasn't caught up
+  // yet (the re-seed effect runs right after, but this render must not crash).
+  const v = values[selected] ?? toValues(metric);
   const unit = td(metric.unit);
 
   const setTier = (tier: Tier, next: number) =>
@@ -230,8 +256,11 @@ export function MetricThresholdsEditor({
   const lowerBound = (tier: Tier) =>
     tier === "watch" ? v.advisory : tier === "warning" ? v.watch : null;
   const invalid = (tier: Tier) => {
+    const val = v[tier];
+    // Empty (NaN while the field is being retyped) can't be saved either.
+    if (!Number.isFinite(val)) return true;
     const lb = lowerBound(tier);
-    return lb !== null && v[tier] <= lb;
+    return lb !== null && val <= lb;
   };
 
   // Save each CHANGED tier value via PUT /api/thresholds/:id (each tier carries
@@ -386,7 +415,7 @@ export function MetricThresholdsEditor({
           {metrics.map((m) => {
             const Icon = METRIC_ICON[m.metric];
             const isActive = m.metric === selected;
-            const mv = values[m.metric];
+            const mv = values[m.metric] ?? toValues(m);
             return (
               <button
                 key={m.metric}
@@ -418,7 +447,7 @@ export function MetricThresholdsEditor({
                     {t(`thresholds.metric.${m.metric}`)}
                   </span>
                   <span className="truncate text-xs tabular-nums text-muted-foreground">
-                    {t("severity.warning")} ≥ {mv.warning} {td(m.unit)}
+                    {t("severity.warning")} ≥ {Number.isFinite(mv.warning) ? mv.warning : "—"} {td(m.unit)}
                   </span>
                 </span>
               </button>
@@ -452,13 +481,22 @@ export function MetricThresholdsEditor({
           </div>
 
           {/* Visual escalation bar. */}
-          <TierScaleBar advisory={v.advisory} watch={v.watch} warning={v.warning} unit={unit} />
+          <TierScaleBar
+            advisory={Number.isFinite(v.advisory) ? v.advisory : 0}
+            watch={Number.isFinite(v.watch) ? v.watch : 0}
+            warning={Number.isFinite(v.warning) ? v.warning : 0}
+            unit={unit}
+          />
 
           {/* Stacked tier inputs — number + unit, inline monotonic validation. */}
           <div className="mt-5 flex flex-col divide-y divide-border-subtle">
             {TIERS.map((tier) => {
-              const bad = invalid(tier);
               const lb = lowerBound(tier);
+              // Below-bound is the hard error (red border + hint). An empty field
+              // is allowed while editing — it just disables Save (anyInvalid) and
+              // doesn't flash red mid-typing.
+              const belowBound =
+                Number.isFinite(v[tier]) && lb !== null && v[tier] <= lb;
               const rowId = metric.tiers.find((tr) => tr.name.toLowerCase() === tier)?.id;
               return (
                 <div key={tier} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-3">
@@ -480,15 +518,17 @@ export function MetricThresholdsEditor({
                       type="number"
                       inputMode="decimal"
                       value={Number.isFinite(v[tier]) ? v[tier] : ""}
-                      onChange={(e) => setTier(tier, Number(e.target.value))}
-                      className={cn("pe-12 tabular-nums", bad && "border-status-warning")}
-                      aria-invalid={bad}
+                      onChange={(e) =>
+                        setTier(tier, e.target.value === "" ? NaN : Number(e.target.value))
+                      }
+                      className={cn("pe-12 tabular-nums", belowBound && "border-status-warning")}
+                      aria-invalid={belowBound}
                     />
                     <span className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">
                       {unit}
                     </span>
                   </div>
-                  {bad ? (
+                  {belowBound ? (
                     <span className="flex items-center gap-1 text-xs text-text-warning">
                       <TriangleAlert className="size-3.5 shrink-0" aria-hidden />
                       {t("thresholds.mustExceed", { prev: `${lb} ${unit}` })}
@@ -517,7 +557,7 @@ export function MetricThresholdsEditor({
               <React.Fragment key={tier}>
                 {i > 0 ? <span aria-hidden>·</span> : null}
                 <span className="font-semibold tabular-nums" style={{ color: TONE_HEX[tier] }}>
-                  {t(`severity.${tier}`)} ≥ {v[tier]}
+                  {t(`severity.${tier}`)} ≥ {Number.isFinite(v[tier]) ? v[tier] : "—"}
                 </span>
               </React.Fragment>
             ))}
@@ -587,7 +627,7 @@ export function MetricThresholdsEditor({
                   <SelectContent>
                     {regionOptions.map((rg) => (
                       <SelectItem key={rg.id} value={rg.id}>
-                        {td(rg.name)}
+                        {t("region." + rg.name)}
                       </SelectItem>
                     ))}
                   </SelectContent>

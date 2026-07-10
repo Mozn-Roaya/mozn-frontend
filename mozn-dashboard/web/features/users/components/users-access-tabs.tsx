@@ -6,6 +6,7 @@ import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useT } from "@/components/providers/locale-provider";
+import { useRole } from "@/components/providers/role-provider";
 import { UsersTable } from "./users-table";
 import { RolePermissions } from "./role-permissions";
 import type { RegionOption, UsersPage } from "@/features/users/types";
@@ -22,6 +23,7 @@ export function UsersAccessTabs({
   regionOptions: RegionOption[];
 }) {
   const t = useT();
+  const { readOnly } = useRole();
   const [tab, setTab] = React.useState("list");
   // The "Add user" action lives here, outside the table Card, so it sits with
   // the page-level actions like every other screen. It triggers the table's
@@ -35,7 +37,7 @@ export function UsersAccessTabs({
           <TabsTrigger value="list">{t("users.tab.list")}</TabsTrigger>
           <TabsTrigger value="roles">{t("users.tab.roles")}</TabsTrigger>
         </TabsList>
-        {tab === "list" ? (
+        {tab === "list" && !readOnly ? (
           <Button size="sm" onClick={() => openCreateRef.current?.()}>
             <Plus className="size-4" />
             {t("users.addUser")}

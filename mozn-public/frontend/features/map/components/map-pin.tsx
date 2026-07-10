@@ -1,4 +1,8 @@
+"use client";
+
 import { cn } from "@/components/lib/cn";
+import { type Dict } from "@/components/lib/i18n";
+import { useT } from "@/components/state/lang-context";
 
 import { PIN_HALO_OPACITY, pinColorFor, type PinKind } from "../lib/pin-status";
 
@@ -12,12 +16,32 @@ type MapPinProps = {
   readonly className?: string;
 };
 
+/** Localized status word for a pin kind — mirrors `hazardFor` so the dot's
+ *  accessible name matches the hazard text shown on the map. */
+function pinKindWord(kind: PinKind, t: Dict): string {
+  switch (kind) {
+    case "red":
+      return t.pinSevere;
+    case "orange":
+      return t.pinWarning;
+    case "yellow":
+      return t.pinWatch;
+    case "offline":
+      return t.pinOffline;
+    default:
+      return t.pinNormal; // normal | warning
+  }
+}
+
 export function MapPin({ kind = "normal", className }: MapPinProps) {
+  const t = useT();
   const color = pinColorFor(kind);
   return (
     <span
       className={cn("relative inline-block size-[28px]", className)}
-      aria-label={`Station status: ${kind}`}
+      // QA: localized accessible name (was a hardcoded-English "Station status:"
+      // string with a raw severity token like "red").
+      aria-label={t.pinStatusAria(pinKindWord(kind, t))}
     >
       <span
         className="absolute inset-0 rounded-full"

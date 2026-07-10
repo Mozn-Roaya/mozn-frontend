@@ -220,6 +220,8 @@ export function AlertManagementView({ initialAlerts }: { initialAlerts: ManagedA
       setCreateOpen(false);
       setAlertDraft(EMPTY_ALERT);
       router.refresh();
+    } catch {
+      toast(t("alertmgmt.create.failed"), "info");
     } finally {
       setCreating(false);
     }
@@ -252,6 +254,8 @@ export function AlertManagementView({ initialAlerts }: { initialAlerts: ManagedA
         }
         toast(action === "resolve" ? t("alertmgmt.toast.resolved") : t("alertmgmt.toast.reopened"));
         router.refresh();
+      } catch {
+        toast(t("alertmgmt.toast.failed"), "info");
       } finally {
         setBusyId(null);
       }
@@ -277,6 +281,8 @@ export function AlertManagementView({ initialAlerts }: { initialAlerts: ManagedA
         }
         toast(t("alertmgmt.toast.severity", { tier: t("severity." + SEVERITY_TIER[severity]) }));
         router.refresh();
+      } catch {
+        toast(t("alertmgmt.toast.failed"), "info");
       } finally {
         setBusyId(null);
       }

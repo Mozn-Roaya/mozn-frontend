@@ -26,7 +26,9 @@ function GovRegionalDashboard({ overview }: { overview: DashboardOverview }) {
   const stations = matches.length ? matches : overview.map.stations;
   const online = stations.filter((s) => s.status === "online").length;
   const offline = stations.filter((s) => s.status === "offline").length;
-  const alerts = stations.filter((s) => s.status === "warning").length;
+  // Active alerts in scope — sum the per-station alert counts, not warning-health
+  // stations (operational health and active alerts are different signals).
+  const alerts = stations.reduce((sum, s) => sum + (s.activeAlerts?.total ?? 0), 0);
 
   const scopedMap = { ...overview.map, stations };
 

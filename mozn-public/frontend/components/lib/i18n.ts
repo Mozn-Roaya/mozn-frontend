@@ -27,6 +27,16 @@ const EN = {
   searchPlaceholder: "Search stations…",
   loadingStations: "Loading stations…",
   noMatch: (q: string) => `No stations match “${q}”.`,
+  // Theme toggle (icon-only button — aria-label is its only accessible name).
+  themeToDark: "Switch to dark mode",
+  themeToLight: "Switch to light mode",
+  // Station-type labels shown in search results; unknown types fall back to
+  // the raw backend value (see station-search).
+  stationTypes: {
+    pws: "Personal Station",
+    aws: "Automatic Station",
+    outdoor: "Outdoor Station",
+  } as Record<string, string>,
 
   // Station tabs
   tabOverview: "Overview",
@@ -53,7 +63,8 @@ const EN = {
   legendNormal: "Normal",
   legendWarning: "Warning",
   legendOffline: "Offline",
-  stationsCount: (n: number) => `${n} stations`,
+  // QA: pluralize so a single station reads "1 station", not "1 stations".
+  stationsCount: (n: number) => `${n} ${n === 1 ? "station" : "stations"}`,
   zoomLevel: (z: string) => `Zoom ${z}`,
   // Pin hazard words (map pin label)
   pinSevere: "Severe",
@@ -61,6 +72,8 @@ const EN = {
   pinWatch: "Watch",
   pinOffline: "Offline",
   pinNormal: "Normal",
+  // Accessible name for the standalone status dot (e.g. in search results).
+  pinStatusAria: (status: string) => `Station status: ${status}`,
   windDirAria: (dir: string) => `Wind direction ${dir}`,
 
   // Temperature card
@@ -166,6 +179,7 @@ const EN = {
   embedSnippet: "Embed snippet",
   copy: "Copy",
   copied: "Copied!",
+  copyFailed: "Copy failed",
   shareStationWord: "Station",
   never: "never",
 
@@ -196,8 +210,9 @@ const EN = {
   preparing: "Preparing…",
   download: (fmt: string) => `Download ${fmt}`,
   couldntPrepare: (err: string) => `Couldn’t prepare download: ${err}`,
+  // QA: export is hourly (one row per hour; CSV header "Time (hour)"), not 15-min.
   readingsMeta: (rows: string, kb: number) =>
-    `${rows} readings · 15-min intervals · ~${kb} KB`,
+    `${rows} readings · hourly · ~${kb} KB`,
   fieldTemperature: "Temperature",
   fieldHumidity: "Humidity",
   fieldRainfall: "Rainfall",
@@ -216,6 +231,13 @@ const AR: Dict = {
   searchPlaceholder: "ابحث عن المحطات…",
   loadingStations: "جارٍ تحميل المحطات…",
   noMatch: (q: string) => `لا توجد محطات تطابق «${q}».`,
+  themeToDark: "التبديل إلى الوضع الداكن",
+  themeToLight: "التبديل إلى الوضع الفاتح",
+  stationTypes: {
+    pws: "محطة شخصية",
+    aws: "محطة آلية",
+    outdoor: "محطة خارجية",
+  },
 
   // Station tabs
   tabOverview: "نظرة عامة",
@@ -249,6 +271,7 @@ const AR: Dict = {
   pinWatch: "ترقب",
   pinOffline: "غير متصل",
   pinNormal: "طبيعي",
+  pinStatusAria: (status: string) => `حالة المحطة: ${status}`,
   windDirAria: (dir: string) => `اتجاه الرياح ${dir}`,
 
   // Temperature card
@@ -349,6 +372,7 @@ const AR: Dict = {
   embedSnippet: "كود التضمين",
   copy: "نسخ",
   copied: "تم النسخ!",
+  copyFailed: "تعذّر النسخ",
   shareStationWord: "المحطة",
   never: "أبداً",
 
@@ -379,7 +403,7 @@ const AR: Dict = {
   download: (fmt: string) => `تنزيل ${fmt}`,
   couldntPrepare: (err: string) => `تعذّر تحضير التنزيل: ${err}`,
   readingsMeta: (rows: string, kb: number) =>
-    `${rows} قراءة · فواصل 15 دقيقة · ~${kb} ك.ب`,
+    `${rows} قراءة · كل ساعة · ~${kb} ك.ب`,
   fieldTemperature: "درجة الحرارة",
   fieldHumidity: "الرطوبة",
   fieldRainfall: "هطول الأمطار",

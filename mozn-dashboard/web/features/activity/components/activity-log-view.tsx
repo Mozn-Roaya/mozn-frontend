@@ -91,10 +91,11 @@ export function ActivityLogView({ page }: { page: ActivityLogPage }) {
     [locale],
   );
 
+  // page.categories are lowercase, sentinel-less values (alert/auth/…); the i18n
+  // keys are capitalized ("history.category.Alert"), so map through CATEGORY_LABEL
+  // exactly like the row + export paths do.
   const categoryLabel = (v: string) =>
-    v === page.categories[0]
-      ? t("history.opt.allCategories")
-      : t("history.category." + v);
+    t("history.category." + CATEGORY_LABEL[v.toLowerCase() as ActivityCategory]);
   const [categories, setCategories] = React.useState<string[]>([]);
   const [query, setQuery] = React.useState("");
   const [date, setDate] = React.useState<Date | undefined>();
@@ -127,7 +128,7 @@ export function ActivityLogView({ page }: { page: ActivityLogPage }) {
   const categoryOptions = React.useMemo(() => {
     const tally = new Map<string, number>();
     allRows.forEach((r) => tally.set(r.category, (tally.get(r.category) ?? 0) + 1));
-    return page.categories.slice(1).map((v) => ({
+    return page.categories.map((v) => ({
       value: v,
       label: categoryLabel(v),
       count: tally.get(v.toLowerCase()) ?? 0,
@@ -160,14 +161,16 @@ export function ActivityLogView({ page }: { page: ActivityLogPage }) {
         case "action":
           return td(a.action).localeCompare(td(b.action));
         case "category":
-          return a.category.localeCompare(b.category);
+          return t("history.category." + CATEGORY_LABEL[a.category]).localeCompare(
+            t("history.category." + CATEGORY_LABEL[b.category]),
+          );
         case "time":
         default:
           return indexOf.get(a.id)! - indexOf.get(b.id)!;
       }
     };
     return filtered.sort((a, b) => cmp(a, b) * dir);
-  }, [allRows, categories, query, date, sort, td]);
+  }, [allRows, categories, query, date, sort, td, t]);
 
   // Distinguish "no rows because filters exclude everything" from "no data at
   // all" so the empty state can say the right thing (and offer Clear filters).

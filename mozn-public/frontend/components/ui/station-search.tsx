@@ -148,7 +148,10 @@ export function StationSearch({ className }: StationSearchProps) {
                     {stationName(s, lang)}
                   </span>
                   <span className="text-body-xxs text-(--color-text-muted) truncate">
-                    {s.wu_station_id} · {s.station_type}
+                    {s.wu_station_id} ·{" "}
+                    {/* QA: localize station type; unknown types fall back to the raw value. */}
+                    {t.stationTypes[s.station_type.toLowerCase()] ??
+                      s.station_type}
                   </span>
                 </span>
               </button>

@@ -180,8 +180,25 @@ function NumberField({
         aria-label={ariaLabel}
         value={Number.isFinite(value) ? value : ""}
         onChange={(e) => {
-          const n = Number(e.target.value);
+          const raw = e.target.value;
+          // Allow clearing the field (empty → blank) so a value can be retyped
+          // instead of snapping to 0; onBlur commits a clamped number.
+          if (raw === "") {
+            onChange(NaN);
+            return;
+          }
+          const n = Number(raw);
           if (!Number.isNaN(n)) onChange(n);
+        }}
+        onBlur={() => {
+          // Commit a valid, in-range value: empty/NaN falls back to min (or 0),
+          // and out-of-range input is clamped to [min, max] so e.g. an SLA
+          // window can't be left at 0 (instant breach) or above the max.
+          let n = value;
+          if (!Number.isFinite(n)) n = min ?? 0;
+          if (min !== undefined) n = Math.max(min, n);
+          if (max !== undefined) n = Math.min(max, n);
+          if (n !== value) onChange(n);
         }}
         className={cn("tabular-nums", unit && "pe-12")}
       />
@@ -216,6 +233,23 @@ export function SettingsView({ page }: { page: SettingsPage }) {
   const [creatingRule, setCreatingRule] = React.useState(false);
   const [deleteTarget, setDeleteTarget] = React.useState<ValidationRule | null>(null);
   const [ruleParams, setRuleParams] = React.useState<WeatherParameter[]>([]);
+
+  // Re-sync the rules list when the server set changes (e.g. after a create +
+  // router.refresh()). Edit/delete update `rules` optimistically; without this a
+  // newly-created rule wouldn't appear until a full reload. Keyed on the id set
+  // so an optimistic edit isn't clobbered by an unrelated re-render.
+  const rulesSig = React.useMemo(
+    () => page.validationRules.map((r) => r.id).join(","),
+    [page.validationRules],
+  );
+  React.useEffect(() => {
+    // Intentional prop-sync: re-sync the rules list from the server after a
+    // create + router.refresh() (edit/delete already update `rules` optimistically).
+    /* eslint-disable react-hooks/set-state-in-effect */
+    setRules(page.validationRules);
+    /* eslint-enable react-hooks/set-state-in-effect */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rulesSig]);
 
   // Parameter catalog for the create dialog (from the backend).
   React.useEffect(() => {
@@ -286,13 +320,19 @@ export function SettingsView({ page }: { page: SettingsPage }) {
     for (const notif of page.notifications) {
       const next = prefs.notif[notif.id] ?? false;
       if (next === notif.enabled) continue;
-      const res = await fetch(`${BASE}/api/settings`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: notif.id, value: next ? "true" : "false" }),
-      });
-      const json = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok && firstError === null) firstError = json.error ?? t("settings.saveFailed");
+      try {
+        const res = await fetch(`${BASE}/api/settings`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: notif.id, value: next ? "true" : "false" }),
+        });
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok && firstError === null) firstError = json.error ?? t("settings.saveFailed");
+      } catch {
+        // Network-level failure (fetch rejected) — surface it instead of leaving
+        // the Save bar dirty with no feedback.
+        if (firstError === null) firstError = t("settings.saveFailed");
+      }
     }
 
     if (firstError) {

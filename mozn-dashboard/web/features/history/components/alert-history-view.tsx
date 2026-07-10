@@ -325,7 +325,7 @@ export function AlertHistoryView({ page, range }: { page: AlertHistoryPage; rang
             size="sm"
             variant="outline"
             className="h-8"
-            onClick={() => exportRows(rows.filter((r) => selected.has(r.id)))}
+            onClick={() => exportRows(page.rows.filter((r) => selected.has(r.id)))}
           >
             <Download className="size-3.5" />
             {t("common.export")}

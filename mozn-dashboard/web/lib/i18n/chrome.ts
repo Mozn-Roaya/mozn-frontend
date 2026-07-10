@@ -164,7 +164,13 @@ export const chrome: Record<string, Entry> = {
   "role.Gov Editor": { en: "Gov Editor", ar: "محرر حكومي" },
   "role.Gov Viewer": { en: "Gov Viewer", ar: "مشاهد حكومي" },
 
-  // Regions (data values displayed across pages)
+  // Regions (data values displayed across pages). These mirror the backend
+  // region names; unknown ones fall back to the raw name (see translate()).
+  "region.Northwest": { en: "Northwest", ar: "الشمال الغربي" },
+  "region.East": { en: "East", ar: "المنطقة الشرقية" },
+  "region.West": { en: "West", ar: "المنطقة الغربية" },
+  "region.South": { en: "South", ar: "المنطقة الجنوبية" },
+  // Legacy Figma region names (kept for any older references).
   "region.Cyrenaica (East)": { en: "Cyrenaica (East)", ar: "برقة (الشرق)" },
   "region.Tripolitania (West)": { en: "Tripolitania (West)", ar: "طرابلس (الغرب)" },
   "region.Fezzan (South)": { en: "Fezzan (South)", ar: "فزان (الجنوب)" },

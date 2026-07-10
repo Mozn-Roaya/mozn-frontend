@@ -13,6 +13,11 @@ export const alertInbox: Record<string, Entry> = {
   "inbox.col.waiting": { en: "Waiting", ar: "منذ" },
   "inbox.col.action": { en: "Action", ar: "الإجراء" },
 
+  // SLA countdown labels (routine urgency has no SLA)
+  "inbox.sla.none": { en: "No SLA", ar: "بدون مهلة" },
+  "inbox.sla.remaining": { en: "{time} to SLA", ar: "{time} حتى المهلة" },
+  "inbox.sla.passed": { en: "SLA passed", ar: "تجاوزت المهلة" },
+
   // Toolbar search
   "inbox.searchPlaceholder": { en: "Search alerts…", ar: "ابحث في التنبيهات…" },
   "inbox.searchAria": { en: "Search alerts", ar: "البحث في التنبيهات" },

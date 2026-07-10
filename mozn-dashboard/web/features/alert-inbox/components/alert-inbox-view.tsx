@@ -56,12 +56,17 @@ const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 /** Recompute an item's SLA countdown from its age + the operator's SLA-minutes
  * preference (routine urgency has no SLA). Pure — uses the fetch-time age, not a
  * live clock, matching how the list was rendered server-side. */
-function slaFor(item: InboxItem, slaMinutes: number): { label: string; tone: SlaTone } {
-  if (item.severity === "routine") return { label: "No SLA", tone: "muted" };
+function slaFor(
+  item: InboxItem,
+  slaMinutes: number,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): { label: string; tone: SlaTone } {
+  if (item.severity === "routine") return { label: t("inbox.sla.none"), tone: "muted" };
   const remaining = slaMinutes * 60 - item.ageSeconds;
   const mmss = (s: number) => `${Math.floor(Math.abs(s) / 60)}:${String(Math.abs(s) % 60).padStart(2, "0")}`;
-  if (remaining > 0) return { label: `${mmss(remaining)} to SLA`, tone: remaining < 60 ? "danger" : "ok" };
-  return { label: "SLA passed", tone: "danger" };
+  if (remaining > 0)
+    return { label: t("inbox.sla.remaining", { time: mmss(remaining) }), tone: remaining < 60 ? "danger" : "ok" };
+  return { label: t("inbox.sla.passed"), tone: "danger" };
 }
 
 export function AlertInboxView({ page }: { page: AlertInboxPage }) {
@@ -431,7 +436,7 @@ export function AlertInboxView({ page }: { page: AlertInboxPage }) {
               {pageRows.map((item) => (
                 <InboxAlertRow
                   key={item.id}
-                  item={{ ...item, sla: slaFor(item, slaAckMinutes) }}
+                  item={{ ...item, sla: slaFor(item, slaAckMinutes, t) }}
                   acknowledged={acked.has(item.id)}
                   escalated={escalated.has(item.id)}
                   selected={selected.has(item.id)}

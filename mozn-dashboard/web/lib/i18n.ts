@@ -46,6 +46,10 @@ export function translate(
 ): string {
   const entry = dict[key];
   let out = entry ? entry[locale] ?? entry.en : key;
+  // Region names are dynamic backend data (admins can add regions). If a
+  // "region.<name>" key has no translation, fall back to the name itself
+  // ("Northwest") rather than surfacing the raw key ("region.Northwest").
+  if (!entry && key.startsWith("region.")) out = key.slice("region.".length);
   if (vars) {
     for (const [name, value] of Object.entries(vars)) {
       out = out.split(`{${name}}`).join(String(value));

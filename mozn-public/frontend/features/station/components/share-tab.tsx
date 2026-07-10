@@ -33,7 +33,11 @@ export function ShareTab({ station }: ShareTabProps) {
       setCopied(key);
       setTimeout(() => setCopied((c) => (c === key ? null : c)), 1800);
     } catch {
-      setCopied("error");
+      // QA: surface the failure (was set-but-never-rendered). Scope it to the
+      // row so its button shows the error, and auto-reset like the success path.
+      const errKey = `error:${key}`;
+      setCopied(errKey);
+      setTimeout(() => setCopied((c) => (c === errKey ? null : c)), 1800);
     }
   }
 
@@ -65,7 +69,11 @@ export function ShareTab({ station }: ShareTabProps) {
                   "transition-colors",
                 )}
               >
-                {copied === row.key ? t.copied : t.copy}
+                {copied === row.key
+                  ? t.copied
+                  : copied === `error:${row.key}`
+                    ? t.copyFailed
+                    : t.copy}
               </button>
             </div>
             <code className="block px-[12px] py-[8px] rounded-[8px] bg-(--color-bg-secondary) text-body-xxs text-(--color-text-primary) break-all whitespace-pre-wrap font-mono">

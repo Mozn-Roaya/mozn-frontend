@@ -123,7 +123,10 @@ export interface AlertTrendPoint {
 
 export interface DashboardHeader {
   title: string;
-  statusLabel: string;
+  // Raw counts so the "N/M stations reporting" label can be built with a
+  // localized i18n template instead of a pre-composed English string.
+  online: number;
+  total: number;
   live: boolean;
 }
 

@@ -36,11 +36,21 @@ export function RecentActivity({ items }: { items: ActivityItem[] }) {
   const { locale, t, td } = useLocale();
 
   // Localized "10 Jun" with Western digits — matches the Activity Log column.
+  // The backend sends an ISO date ("2026-07-09"); also tolerate the legacy
+  // "10 Jun" shape so either renders localized instead of falling through raw.
   const fmtDate = React.useCallback(
     (value: string) => {
-      const m = value.match(/(\d{1,2})\s+([A-Za-z]+)/);
-      if (!m || MONTHS[m[2]] === undefined) return td(value);
-      const d = new Date(new Date().getFullYear(), MONTHS[m[2]], Number(m[1]));
+      let d: Date | null = null;
+      if (/\d{4}-\d{2}-\d{2}/.test(value)) {
+        const parsed = new Date(value);
+        if (!Number.isNaN(parsed.getTime())) d = parsed;
+      } else {
+        const m = value.match(/(\d{1,2})\s+([A-Za-z]+)/);
+        if (m && MONTHS[m[2]] !== undefined) {
+          d = new Date(new Date().getFullYear(), MONTHS[m[2]], Number(m[1]));
+        }
+      }
+      if (!d) return td(value);
       return new Intl.DateTimeFormat(locale === "ar" ? "ar-u-nu-latn" : "en", {
         day: "numeric",
         month: "short",

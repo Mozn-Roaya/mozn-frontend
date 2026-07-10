@@ -93,7 +93,7 @@ export function PageHeader({
             data-live={header.live}
             aria-hidden
           />
-          {td(header.statusLabel)}
+          {t("dashboard.header.reporting", { online: header.online, total: header.total })}
         </p>
       </div>
 

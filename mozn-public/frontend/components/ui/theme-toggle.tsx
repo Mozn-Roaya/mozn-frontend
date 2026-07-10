@@ -4,6 +4,7 @@ import * as React from "react";
 
 import { SunIcon, MoonIcon } from "../icons";
 import { cn } from "../lib/cn";
+import { useT } from "../state/lang-context";
 
 type Theme = "light" | "dark";
 
@@ -19,6 +20,7 @@ type Props = {
 };
 
 export function ThemeToggle({ className }: Props) {
+  const t = useT();
   const [theme, setTheme] = React.useState<Theme>("light");
   const [mounted, setMounted] = React.useState(false);
 
@@ -48,7 +50,8 @@ export function ThemeToggle({ className }: Props) {
   }
 
   const Icon = theme === "light" ? MoonIcon : SunIcon;
-  const label = theme === "light" ? "Switch to dark mode" : "Switch to light mode";
+  // QA: localized — this aria-label is the icon-only button's only accessible name.
+  const label = theme === "light" ? t.themeToDark : t.themeToLight;
 
   return (
     <button

@@ -306,7 +306,8 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
   return {
     header: {
       title: "System Overview",
-      statusLabel: `${norm.activeStations}/${norm.totalStations} stations reporting`,
+      online: norm.activeStations,
+      total: norm.totalStations,
       live: true,
     },
     stats: stats_,
@@ -372,6 +373,7 @@ export async function getStations(): Promise<StationsPage> {
     filters: [
       { key: "all", label: "All", count: rows.length },
       { key: "online", label: "Online", count: count((r) => r.status === "online") },
+      { key: "warning", label: "Warning", count: count((r) => r.status === "warning") },
       { key: "offline", label: "Offline", count: count((r) => r.status === "offline") },
       { key: "maintenance", label: "Maintenance", count: count((r) => r.status === "maintenance") },
       { key: "anomaly", label: "Anomaly", count: count((r) => r.status === "anomaly") },

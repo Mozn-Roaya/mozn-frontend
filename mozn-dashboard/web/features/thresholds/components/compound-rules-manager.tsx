@@ -360,7 +360,7 @@ export function CompoundRulesManager({
                         <SelectTrigger id="cr-region" className="w-full"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {regionOptions.map((r) => (
-                            <SelectItem key={r.id} value={r.id}>{td(r.name)}</SelectItem>
+                            <SelectItem key={r.id} value={r.id}>{t("region." + r.name)}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>

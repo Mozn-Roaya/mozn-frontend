@@ -10,6 +10,10 @@ export const dashboard: Record<string, Entry> = {
   "dashboard.section.analytics": { en: "Analytics", ar: "التحليلات" },
 
   // Page header
+  "dashboard.header.reporting": {
+    en: "{online}/{total} stations reporting",
+    ar: "{online}/{total} محطة ترسل البيانات",
+  },
   "dashboard.systemStatusAria": { en: "System status", ar: "حالة النظام" },
   "dashboard.testModeAria": { en: "Test mode", ar: "وضع الاختبار" },
   "dashboard.exportFilename": { en: "system-status-report", ar: "تقرير-حالة-النظام" },

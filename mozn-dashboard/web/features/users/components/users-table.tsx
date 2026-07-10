@@ -471,12 +471,16 @@ export function UsersTable({
   const roleOptions = React.useMemo(() => {
     const tally = new Map<string, number>();
     rows.forEach((u) => tally.set(u.role, (tally.get(u.role) ?? 0) + 1));
+    // Key off f.label (the display name), not f.key (a slug). The row filter
+    // matches on u.role (a display name), the tally is keyed on u.role, and the
+    // i18n keys are "role.Super Admin" — so a slug would render the raw key,
+    // count zero, and empty the table on selection.
     return page.filters
       .filter((f) => f.key !== "all")
       .map((f) => ({
-        value: f.key,
-        label: t("role." + f.key),
-        count: tally.get(f.key) ?? 0,
+        value: f.label,
+        label: t("role." + f.label),
+        count: tally.get(f.label) ?? 0,
       }));
   }, [rows, page.filters, t]);
 
@@ -606,6 +610,7 @@ export function UsersTable({
                   )}
                 </TableCell>
                 <TableCell className="text-end">
+                  {!readOnly ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
@@ -644,6 +649,7 @@ export function UsersTable({
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
+                  ) : null}
                 </TableCell>
               </TableRow>
             ))

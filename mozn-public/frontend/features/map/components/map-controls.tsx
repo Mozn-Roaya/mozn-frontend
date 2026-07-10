@@ -56,7 +56,8 @@ export function MapControls({
       <IconButton
         icon="layers"
         label={showLabels ? t.hideLabels : t.showLabels}
-        aria-pressed={!showLabels}
+        // QA: aria-pressed must reflect the real toggle state (labels on).
+        aria-pressed={showLabels}
         onClick={onToggleLabels}
         className={cn(!showLabels && "bg-(--color-bg-secondary)")}
       />
