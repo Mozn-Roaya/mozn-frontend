@@ -9,7 +9,7 @@ import type {
   StationWriteInput,
 } from "@/types/stations";
 import type { AlertInboxPage, InboxItem } from "@/types/alert-inbox";
-import type { ThresholdsPage, MetricThresholds, ThresholdTier, ScaleStop, ThresholdChange } from "@/types/thresholds";
+import type { ThresholdsPage, MetricThresholds, ThresholdTier, ScaleStop, ThresholdChange, CompoundRule } from "@/types/thresholds";
 import type {
   UsersPage,
   UserRow,
@@ -18,9 +18,9 @@ import type {
   RegionOption,
 } from "@/types/users";
 import type { AlertHistoryPage, AlertHistoryRow } from "@/types/history";
-import type { ActivityLogPage, ActivityRow, ActivityDayGroup } from "@/types/activity";
+import type { ActivityLogPage, ActivityRow, ActivityDayGroup, AuditLogDetail } from "@/types/activity";
 import type { SettingsPage, NotificationPref, ValidationRule } from "@/types/settings";
-import type { ActivityCategory, ThresholdMetric } from "@/types/shared";
+import type { ActivityCategory, ThresholdMetric, WeatherParameter } from "@/types/shared";
 import type { RoleMatrix } from "@/types/roles";
 
 import { backendData, backendFetch, backendMutate, getCurrentUser, type MutationResult } from "@/lib/backend";
@@ -29,7 +29,9 @@ import type {
   BackendAuditLog,
   BackendDashboardStats,
   BackendGovDashboardStats,
+  BackendCompoundRule,
   BackendMunicipality,
+  BackendParameter,
   BackendPermission,
   BackendPreviewResult,
   BackendRegion,
@@ -48,8 +50,9 @@ import type {
   ManagedStatus,
 } from "@/features/alert-management/types";
 import type { AlertTemplate } from "@/features/alert-templates/types";
-import type { BackendAlertTemplate, BackendReading } from "@/lib/backend-types";
+import type { BackendAlertTemplate, BackendReading, BackendWeatherForecast } from "@/lib/backend-types";
 import type { StationDetail } from "@/components/station-detail/station-detail";
+import type { ForecastDay, WeatherCondition } from "@/components/station-detail/station-weather";
 import {
   duration,
   elapsed,
@@ -130,14 +133,18 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
   const me = await getCurrentUser();
   const useGov = !me.permissions.includes("dashboard.view") && me.permissions.includes("gov.dashboard");
 
+  // 7-day window for the alert-opened trend chart.
+  const trendFrom = new Date(Date.now() - 7 * 86_400_000).toISOString();
+
   // Supplementary context (best-effort; region-scoped server-side for gov users).
-  const [regions, municipalities, stations, users, activeAlerts, audit] = await Promise.all([
+  const [regions, municipalities, stations, users, activeAlerts, audit, trendAlerts] = await Promise.all([
     loadRegions(),
     loadMunicipalities(),
     loadStationsAll(),
     loadUsersAll(),
     backendData<BackendAlert[]>("/api/alerts?is_active=true&page_size=500").catch(() => [] as BackendAlert[]),
     backendData<BackendAuditLog[]>("/api/audit-logs?page_size=20").catch(() => [] as BackendAuditLog[]),
+    backendData<BackendAlert[]>(`/api/alerts?from=${trendFrom}&page_size=1000`).catch(() => [] as BackendAlert[]),
   ]);
 
   const muniRegion = municipalityRegionName(municipalities, regions);
@@ -270,6 +277,21 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
       };
     });
 
+  // 7-day alert-opened trend, bucketed by issued_at day (oldest → newest).
+  const dayMs = 86_400_000;
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const trend = Array.from({ length: 7 }, (_, i) => ({
+    date: new Date(todayStart.getTime() - (6 - i) * dayMs).toISOString().slice(0, 10),
+    count: 0,
+  }));
+  const trendIdx = new Map(trend.map((p, i) => [p.date, i]));
+  for (const a of trendAlerts) {
+    const key = new Date(a.issued_at).toISOString().slice(0, 10);
+    const i = trendIdx.get(key);
+    if (i != null) trend[i].count += 1;
+  }
+
   // Per-region station rollup.
   const regionRollup = new Map<string, { id: string; name: string; online: number; total: number }>();
   for (const r of regions) regionRollup.set(r.name, { id: r.id, name: r.name, online: 0, total: 0 });
@@ -300,6 +322,7 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
     },
     recentActivity,
     regions: [...regionRollup.values()].filter((r) => r.name !== "—" || r.total > 0),
+    alertTrend: trend,
   };
 }
 
@@ -389,6 +412,7 @@ export async function getAlertInbox(): Promise<AlertInboxPage> {
       id: a.id,
       severity: a.urgency, // routine | urgent | critical == InboxSeverity
       title: paramLabel(a.parameter),
+      ...(a.station_id ? { stationId: a.station_id } : {}),
       context: [st?.name, st?.region, a.source].filter(Boolean).join(" · "),
       timeAgo: relativeTime(a.issued_at),
       sla,
@@ -495,7 +519,7 @@ export async function getThresholds(): Promise<ThresholdsPage> {
     };
   });
 
-  return { metrics, impact: { note: "", stations: [] }, changes };
+  return { metrics, changes };
 }
 
 // ── Users (A4) ────────────────────────────────────────────────────────────────
@@ -655,6 +679,26 @@ export async function getActivityLog(): Promise<ActivityLogPage> {
   return { categories, users: actors, groups };
 }
 
+/** GET /api/audit-logs/:id — full detail for the activity-log row detail view. */
+export async function getAuditLog(id: string): Promise<AuditLogDetail> {
+  const l = await backendData<BackendAuditLog>(`/api/audit-logs/${id}`);
+  return {
+    id: l.id,
+    action: l.action,
+    resourceType: l.resource_type,
+    resourceId: l.resource_id ?? null,
+    status: l.status,
+    statusCode: l.status_code,
+    ipAddress: l.ip_address,
+    userAgent: l.user_agent,
+    durationMs: l.duration_ms,
+    createdAt: l.created_at,
+    requestPayload: l.request_payload ?? null,
+    responseError: l.response_error ?? null,
+    details: l.details ?? null,
+  };
+}
+
 // ── Settings (A6.0) ───────────────────────────────────────────────────────────
 
 function humanizeKey(key: string): string {
@@ -662,9 +706,10 @@ function humanizeKey(key: string): string {
 }
 
 export async function getSettings(): Promise<SettingsPage> {
-  const [settings, rules] = await Promise.all([
+  const [settings, rules, regions] = await Promise.all([
     backendData<BackendSystemSetting[]>("/api/settings?page_size=200").catch(() => [] as BackendSystemSetting[]),
     backendData<BackendValidationRule[]>("/api/validation-rules?page_size=200").catch(() => [] as BackendValidationRule[]),
+    loadRegions(),
   ]);
 
   const notifications: NotificationPref[] = settings.map((s) => ({
@@ -696,7 +741,7 @@ export async function getSettings(): Promise<SettingsPage> {
       metric: paramLabel(r.parameter),
       validRange,
       maxRate,
-      active: true,
+      active: r.is_active ?? true,
       validRangeMin: r.valid_range_min ?? null,
       validRangeMax: r.valid_range_max ?? null,
       maxRateOfChange: r.max_rate_of_change ?? null,
@@ -709,6 +754,7 @@ export async function getSettings(): Promise<SettingsPage> {
     validationNote:
       "Readings outside these bounds are flagged and withheld from the public map.",
     validationRules,
+    regions: regions.map((r) => ({ id: r.id, name: r.name })),
   };
 }
 
@@ -879,6 +925,86 @@ export async function getRegionOptions(): Promise<RegionOption[]> {
   return regions.map((r) => ({ id: r.id, name: r.name }));
 }
 
+// ── Compound rules (A3.0) ───────────────────────────────────────────────────
+
+function mapCompoundRule(r: BackendCompoundRule): CompoundRule {
+  return {
+    id: r.id,
+    name: r.name,
+    regionId: r.region_id,
+    severity: r.severity,
+    isActive: r.is_active,
+    conditions: (r.conditions ?? []).map((c) => ({
+      id: c.id,
+      parameter: c.parameter,
+      operator: c.operator,
+      value: c.value,
+      sustainMinutes: c.sustain_minutes ?? null,
+    })),
+  };
+}
+
+export async function getCompoundRules(): Promise<CompoundRule[]> {
+  const rows = await backendData<BackendCompoundRule[]>("/api/compound-rules?page_size=200").catch(
+    () => [] as BackendCompoundRule[],
+  );
+  return rows.map(mapCompoundRule);
+}
+
+export interface CompoundRuleConditionInput {
+  parameter: string;
+  operator: "gt" | "gte" | "lt" | "lte" | "eq";
+  value: number;
+  sustain_minutes?: number | null;
+}
+
+export interface CompoundRuleWriteInput {
+  name: string;
+  region_id: string;
+  severity: "yellow" | "orange" | "red";
+  is_active?: boolean;
+  conditions: CompoundRuleConditionInput[];
+}
+
+export function createCompoundRule(
+  input: CompoundRuleWriteInput,
+): Promise<MutationResult<BackendCompoundRule>> {
+  return backendMutate<BackendCompoundRule>("/api/compound-rules", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateCompoundRule(
+  id: string,
+  input: Partial<CompoundRuleWriteInput>,
+): Promise<MutationResult<BackendCompoundRule>> {
+  return backendMutate<BackendCompoundRule>(`/api/compound-rules/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteCompoundRule(id: string): Promise<MutationResult<null>> {
+  return backendMutate<null>(`/api/compound-rules/${id}`, { method: "DELETE" });
+}
+
+// ── Parameter catalog (thresholds / alerts / validation dropdowns) ──────────
+
+/** GET /api/parameters — the backend's canonical weather-parameter catalog. */
+export async function getParameters(): Promise<WeatherParameter[]> {
+  const rows = await backendData<BackendParameter[]>("/api/parameters");
+  return rows.map((p) => ({
+    key: p.key,
+    name: p.name,
+    nameAr: p.name_ar,
+    unit: p.unit,
+    category: p.category,
+    alertable: p.alertable ?? true,
+    validation: p.validation ?? true,
+  }));
+}
+
 // ── Stations CRUD (A2.1) ────────────────────────────────────────────────────
 
 /** Full station detail for the edit form — the list DTO omits coords/sensors, so
@@ -1013,6 +1139,25 @@ export function escalateAlert(id: string, urgency: string): Promise<MutationResu
   return backendMutate<BackendAlert>(`/api/alerts/${id}/escalate`, {
     method: "POST",
     body: JSON.stringify({ urgency }),
+  });
+}
+
+/** POST /api/alerts/:id/confirm — promote a pending alert to confirmed. */
+export function confirmAlert(id: string, note?: string): Promise<MutationResult<BackendAlert>> {
+  return backendMutate<BackendAlert>(`/api/alerts/${id}/confirm`, {
+    method: "POST",
+    body: JSON.stringify(note ? { confirm_note: note } : {}),
+  });
+}
+
+/** PUT /api/alerts/:id/modify — change severity / level / messages of an alert. */
+export function modifyAlert(
+  id: string,
+  input: { severity?: string; level?: string; message?: string; message_ar?: string },
+): Promise<MutationResult<BackendAlert>> {
+  return backendMutate<BackendAlert>(`/api/alerts/${id}/modify`, {
+    method: "PUT",
+    body: JSON.stringify(input),
   });
 }
 
@@ -1154,6 +1299,63 @@ export async function getLatestReading(stationId: string): Promise<Partial<Stati
   return out;
 }
 
+// ── Station forecast (B-forecast) ───────────────────────────────────────────
+
+const DAY_KEYS: ForecastDay["key"][] = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+/** Derive a coarse weather icon from a day's peak rain/wind/humidity. */
+function forecastCondition(maxRain: number, maxGust: number, maxHumidity: number): WeatherCondition {
+  if (maxRain >= 10 || maxGust >= 55) return "storms";
+  if (maxRain >= 0.2) return "rain";
+  if (maxHumidity >= 75) return "cloudy";
+  return "sunny";
+}
+
+/**
+ * GET /api/forecasts?station_id= — hourly forecast rows aggregated into up to 7
+ * daily ForecastDay entries (low/high temp + a derived condition) for the
+ * station-summary card's 7-day forecast. Empty when the station has no forecast.
+ */
+export async function getStationForecast(stationId: string): Promise<ForecastDay[]> {
+  const rows = await backendData<BackendWeatherForecast[]>(
+    `/api/forecasts?station_id=${encodeURIComponent(stationId)}`,
+  ).catch(() => [] as BackendWeatherForecast[]);
+  if (rows.length === 0) return [];
+
+  interface Bucket {
+    date: string;
+    temps: number[];
+    maxRain: number;
+    maxGust: number;
+    maxHumidity: number;
+  }
+  const byDay = new Map<string, Bucket>();
+  for (const r of rows) {
+    const d = new Date(r.forecast_for);
+    if (Number.isNaN(d.getTime())) continue;
+    const key = d.toISOString().slice(0, 10);
+    const b =
+      byDay.get(key) ?? { date: key, temps: [], maxRain: 0, maxGust: 0, maxHumidity: 0 };
+    if (r.temp_c != null) b.temps.push(r.temp_c);
+    if (r.rain_rate_mm != null) b.maxRain = Math.max(b.maxRain, r.rain_rate_mm);
+    if (r.wind_gust_kmh != null) b.maxGust = Math.max(b.maxGust, r.wind_gust_kmh);
+    if (r.humidity != null) b.maxHumidity = Math.max(b.maxHumidity, r.humidity);
+    byDay.set(key, b);
+  }
+
+  const todayKey = new Date().toISOString().slice(0, 10);
+  return [...byDay.values()]
+    .filter((b) => b.temps.length > 0)
+    .sort((a, b) => (a.date < b.date ? -1 : 1))
+    .slice(0, 7)
+    .map((b, i) => ({
+      key: i === 0 && b.date === todayKey ? "today" : DAY_KEYS[new Date(b.date + "T00:00:00").getDay()],
+      condition: forecastCondition(b.maxRain, b.maxGust, b.maxHumidity),
+      low: Math.round(Math.min(...b.temps)),
+      high: Math.round(Math.max(...b.temps)),
+    }));
+}
+
 // ── Settings + validation rules (A6) ────────────────────────────────────────
 
 /** PUT /api/settings — single key/value upsert (no bulk endpoint; call per key). */
@@ -1171,10 +1373,33 @@ export function updateValidationRule(
     valid_range_max?: number | null;
     max_rate_of_change?: number | null;
     rate_interval_min?: number | null;
+    is_active?: boolean;
   },
 ): Promise<MutationResult<BackendValidationRule>> {
   return backendMutate<BackendValidationRule>(`/api/validation-rules/${id}`, {
     method: "PUT",
     body: JSON.stringify(input),
   });
+}
+
+export interface CreateValidationRuleInput {
+  parameter: string;
+  region_id?: string | null;
+  valid_range_min?: number | null;
+  valid_range_max?: number | null;
+  max_rate_of_change?: number | null;
+  rate_interval_min?: number | null;
+}
+
+export function createValidationRule(
+  input: CreateValidationRuleInput,
+): Promise<MutationResult<BackendValidationRule>> {
+  return backendMutate<BackendValidationRule>("/api/validation-rules", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteValidationRule(id: string): Promise<MutationResult<null>> {
+  return backendMutate<null>(`/api/validation-rules/${id}`, { method: "DELETE" });
 }

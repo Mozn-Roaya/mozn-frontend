@@ -1,12 +1,18 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { Download, Eye, Inbox, SearchX } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { EmptyState } from "@/components/common/empty-state";
 import { SearchInput } from "@/components/common/search-input";
 import {
@@ -39,8 +45,11 @@ import type {
   ActivityCategory,
   ActivityLogPage,
   ActivityRow,
+  AuditLogDetail,
 } from "@/features/activity/types";
 import { CATEGORY_LABEL } from "@/components/common/activity-category";
+
+const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 // Category → status-dot colour, matching the badge palette used elsewhere.
 const CATEGORY_DOT: Record<ActivityCategory, string> = {
@@ -172,6 +181,22 @@ export function ActivityLogView({ page }: { page: ActivityLogPage }) {
 
   const [density, setDensity] = React.useState<Density>("comfortable");
   const rowPad = rowPadFor(density);
+
+  // Per-row detail: fetch the full audit entry on demand (the list DTO omits
+  // payload / response error / details / user agent).
+  const [detailRow, setDetailRow] = React.useState<ActivityRow | null>(null);
+  const [detail, setDetail] = React.useState<AuditLogDetail | null>(null);
+  const [detailLoading, setDetailLoading] = React.useState(false);
+  const openDetail = (row: ActivityRow) => {
+    setDetailRow(row);
+    setDetail(null);
+    setDetailLoading(true);
+    fetch(`${BASE}/api/audit-logs/${row.id}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => setDetail(j?.data ?? null))
+      .catch(() => setDetail(null))
+      .finally(() => setDetailLoading(false));
+  };
 
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const allVisibleSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
@@ -353,14 +378,15 @@ export function ActivityLogView({ page }: { page: ActivityLogPage }) {
                     </span>
                   </TableCell>
                   <TableCell className="align-middle text-end">
-                    <Link
-                      href="/alert-inbox"
+                    <button
+                      type="button"
+                      onClick={() => openDetail(row)}
                       aria-label={t("history.activity.view")}
                       title={t("history.activity.view")}
                       className="inline-grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <Eye className="size-4" aria-hidden />
-                    </Link>
+                    </button>
                   </TableCell>
                 </TableRow>
               ))
@@ -380,6 +406,62 @@ export function ActivityLogView({ page }: { page: ActivityLogPage }) {
           />
         )}
       </Card>
+
+      {/* Per-entry detail — full audit record (payload, response, IP, agent). */}
+      <Dialog open={detailRow !== null} onOpenChange={(o) => { if (!o) { setDetailRow(null); setDetail(null); } }}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{t("history.activity.detailTitle")}</DialogTitle>
+            <DialogDescription>
+              {detailRow ? `${td(detailRow.actor)} · ${td(detailRow.action)}` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          {detailLoading ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">{t("history.activity.loading")}</p>
+          ) : detail ? (
+            <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2.5 text-sm">
+              <DetailRow label={t("history.activity.detail.resource")} value={detail.resourceId ? `${detail.resourceType} · ${detail.resourceId}` : detail.resourceType} />
+              <DetailRow label={t("history.activity.detail.status")} value={`${detail.status} (${detail.statusCode})`} />
+              <DetailRow label={t("history.activity.detail.ip")} value={detail.ipAddress || "—"} />
+              <DetailRow label={t("history.activity.detail.duration")} value={`${detail.durationMs} ms`} />
+              <DetailRow label={t("history.activity.detail.agent")} value={detail.userAgent || "—"} />
+              {detail.responseError ? (
+                <DetailRow label={t("history.activity.detail.error")} value={detail.responseError} />
+              ) : null}
+              {detail.requestPayload != null ? (
+                <DetailBlock label={t("history.activity.detail.payload")} value={detail.requestPayload} />
+              ) : null}
+              {detail.details != null ? (
+                <DetailBlock label={t("history.activity.detail.details")} value={detail.details} />
+              ) : null}
+            </dl>
+          ) : (
+            <p className="py-6 text-center text-sm text-muted-foreground">{t("history.activity.detailFailed")}</p>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+/** One label/value row in the audit-detail grid. */
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <>
+      <dt className="font-medium text-muted-foreground">{label}</dt>
+      <dd className="min-w-0 break-words text-foreground" dir="auto">{value}</dd>
+    </>
+  );
+}
+
+/** A JSON block spanning both grid columns (payload / details). */
+function DetailBlock({ label, value }: { label: string; value: unknown }) {
+  return (
+    <div className="col-span-2 grid gap-1.5">
+      <span className="font-medium text-muted-foreground">{label}</span>
+      <pre className="overflow-x-auto rounded-lg border border-border-subtle bg-secondary/40 p-3 text-xs leading-relaxed text-foreground" dir="ltr">
+        {JSON.stringify(value, null, 2)}
+      </pre>
     </div>
   );
 }

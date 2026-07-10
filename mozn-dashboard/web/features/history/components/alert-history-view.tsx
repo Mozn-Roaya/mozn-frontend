@@ -34,16 +34,6 @@ import { cn } from "@/lib/utils";
 import type { Locale } from "@/lib/i18n";
 import type { AlertHistoryPage, AlertHistoryRow } from "@/features/history/types";
 
-// Map a Type filter option to a keyword found in the alert title, so the
-// control actually filters instead of being decorative.
-const TYPE_KEYWORD: Record<string, string> = {
-  Rainfall: "rain",
-  Wind: "wind",
-  "Water level": "water",
-  Temperature: "temp",
-  Compound: "compound",
-};
-
 // Ordered so ascending sort lists the most severe alerts first.
 const SEVERITY_RANK: Record<string, number> = { critical: 0, warning: 1, watch: 2, advisory: 3 };
 
@@ -120,11 +110,11 @@ export function AlertHistoryView({ page, range }: { page: AlertHistoryPage; rang
     setQuery("");
   };
 
-  // Type filters by keyword match in the alert title (not a stored field).
-  const alertMatchesType = (alert: string, tp: string) => {
-    const keyword = TYPE_KEYWORD[tp];
-    return keyword ? alert.toLowerCase().includes(keyword) : false;
-  };
+  // Type options are the parameter labels present in the data, and each row's
+  // `alert` is "<paramLabel> — <station>", so match the label directly instead
+  // of via a hardcoded keyword map that didn't cover the real backend params.
+  const alertMatchesType = (alert: string, tp: string) =>
+    alert.toLowerCase().includes(tp.toLowerCase());
 
   // Rows narrowed by region/type — drives the severity facet counts.
   const base = React.useMemo(() => {
@@ -193,7 +183,7 @@ export function AlertHistoryView({ page, range }: { page: AlertHistoryPage; rang
   // region/type over the full dataset.
   const severityOptions = React.useMemo(
     () =>
-      page.severities.slice(1).map((v) => ({
+      page.severities.map((v) => ({
         value: v,
         label: t("severity." + v.toLowerCase()),
         count: base.filter((r) => r.severity === v.toLowerCase()).length,
@@ -202,7 +192,7 @@ export function AlertHistoryView({ page, range }: { page: AlertHistoryPage; rang
   );
   const regionOptions = React.useMemo(
     () =>
-      page.regions.slice(1).map((v) => ({
+      page.regions.map((v) => ({
         value: v,
         label: t("region." + v),
         count: page.rows.filter((r) => r.region === v).length,
@@ -211,12 +201,12 @@ export function AlertHistoryView({ page, range }: { page: AlertHistoryPage; rang
   );
   const typeOptions = React.useMemo(
     () =>
-      page.types.slice(1).map((v) => ({
+      page.types.map((v) => ({
         value: v,
-        label: t("history.type." + v),
+        label: td(v),
         count: page.rows.filter((r) => alertMatchesType(r.alert, v)).length,
       })),
-    [page.types, page.rows, t],
+    [page.types, page.rows, td],
   );
 
   const { pageSize, setPageSize, setPageIndex, safePage, pageRows } = usePagination(rows);
@@ -235,8 +225,8 @@ export function AlertHistoryView({ page, range }: { page: AlertHistoryPage; rang
     setPageIndex(1);
   }
 
-  const handleExport = () => {
-    if (rows.length === 0) {
+  const exportRows = (data: AlertHistoryRow[]) => {
+    if (data.length === 0) {
       toast(t("history.export.nothing"), "info");
       return;
     }
@@ -251,10 +241,11 @@ export function AlertHistoryView({ page, range }: { page: AlertHistoryPage; rang
         { header: t("history.col.duration"), value: (r) => r.duration },
         { header: t("history.col.outcome"), value: (r) => t("outcome." + r.outcome) },
       ],
-      rows,
+      data,
     );
-    toast(t("history.export.alerts", { count: rows.length }));
+    toast(t("history.export.alerts", { count: data.length }));
   };
+  const handleExport = () => exportRows(rows);
 
   return (
     <div className="space-y-6">
@@ -315,7 +306,17 @@ export function AlertHistoryView({ page, range }: { page: AlertHistoryPage; rang
           <DensityToggle value={density} onChange={setDensity} />
         </div>
       </div>
-        <SelectionBar count={selected.size} onClear={() => setSelected(new Set())} />
+        <SelectionBar count={selected.size} onClear={() => setSelected(new Set())}>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8"
+            onClick={() => exportRows(rows.filter((r) => selected.has(r.id)))}
+          >
+            <Download className="size-3.5" />
+            {t("common.export")}
+          </Button>
+        </SelectionBar>
         <Table containerClassName="max-h-[calc(100vh-440px)] min-h-[260px]">
           <TableHeader>
             <TableRow className={tableHeaderRowClass}>

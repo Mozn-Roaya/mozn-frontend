@@ -337,6 +337,62 @@ export function UsersTable({
     router.refresh();
   };
 
+  // ── Bulk actions over the current selection ──────────────────────────────
+  const [bulkBusy, setBulkBusy] = React.useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = React.useState(false);
+
+  const bulkSetActive = async (active: boolean) => {
+    const targets = rows.filter((u) => selected.has(u.id) && u.active !== active);
+    if (targets.length === 0) {
+      setSelected(new Set());
+      return;
+    }
+    setBulkBusy(true);
+    const results = await Promise.all(
+      targets.map((u) =>
+        fetch(`${BASE}/api/users/${u.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ is_active: active }),
+        })
+          .then((r) => r.ok)
+          .catch(() => false),
+      ),
+    );
+    setBulkBusy(false);
+    const failed = results.filter((ok) => !ok).length;
+    toast(
+      failed
+        ? t("users.bulkFailed")
+        : t(active ? "users.bulkActivated" : "users.bulkDeactivated", { count: targets.length }),
+      failed ? "info" : "success",
+    );
+    setSelected(new Set());
+    router.refresh();
+  };
+
+  const bulkDelete = async () => {
+    const targets = rows.filter((u) => selected.has(u.id));
+    if (targets.length === 0) return;
+    setBulkBusy(true);
+    const results = await Promise.all(
+      targets.map((u) =>
+        fetch(`${BASE}/api/users/${u.id}`, { method: "DELETE" })
+          .then((r) => r.ok)
+          .catch(() => false),
+      ),
+    );
+    setBulkBusy(false);
+    const failed = results.filter((ok) => !ok).length;
+    toast(
+      failed ? t("users.bulkFailed") : t("users.bulkDeleted", { count: targets.length }),
+      failed ? "info" : "success",
+    );
+    setBulkDeleteOpen(false);
+    setSelected(new Set());
+    router.refresh();
+  };
+
   const visible = React.useMemo(() => {
     const q = query.trim().toLowerCase();
     const filtered = rows.filter((u) => {
@@ -456,7 +512,30 @@ export function UsersTable({
         </div>
       </div>
 
-      <SelectionBar count={selected.size} onClear={() => setSelected(new Set())} />
+      <SelectionBar count={selected.size} onClear={() => setSelected(new Set())}>
+        {!readOnly ? (
+          <>
+            <Button size="sm" variant="outline" className="h-8" onClick={() => bulkSetActive(true)} disabled={bulkBusy}>
+              <UserCheck className="size-3.5" />
+              {t("users.activate")}
+            </Button>
+            <Button size="sm" variant="outline" className="h-8" onClick={() => bulkSetActive(false)} disabled={bulkBusy}>
+              <UserX className="size-3.5" />
+              {t("users.deactivate")}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-text-warning hover:text-text-warning"
+              onClick={() => setBulkDeleteOpen(true)}
+              disabled={bulkBusy}
+            >
+              <Trash2 className="size-3.5" />
+              {t("users.removeUser")}
+            </Button>
+          </>
+        ) : null}
+      </SelectionBar>
 
       <Table containerRef={scrollRef} containerClassName="min-h-0 flex-1">
         <TableHeader>
@@ -846,6 +925,32 @@ export function UsersTable({
             >
               <UserX className="size-4" />
               {t("users.soleEditor.confirm")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk delete confirmation */}
+      <Dialog open={bulkDeleteOpen} onOpenChange={(o) => { if (!o && !bulkBusy) setBulkDeleteOpen(false); }}>
+        <DialogContent>
+          <DialogHeader className="flex-row items-center gap-3.5 space-y-0">
+            <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-xl bg-status-warning/10 text-text-warning">
+              <Trash2 className="size-5" />
+            </span>
+            <div className="flex min-w-0 flex-col gap-1">
+              <DialogTitle>{t("users.bulkDeleteTitle")}</DialogTitle>
+              <DialogDescription>
+                {t("users.bulkDeleteDesc", { count: selected.size })}
+              </DialogDescription>
+            </div>
+          </DialogHeader>
+          <DialogFooter className="mt-6 border-t border-border-subtle pt-4">
+            <DialogClose asChild>
+              <Button type="button" variant="outline" disabled={bulkBusy}>{t("common.cancel")}</Button>
+            </DialogClose>
+            <Button type="button" variant="destructive" onClick={bulkDelete} disabled={bulkBusy}>
+              <Trash2 className="size-4" />
+              {t("users.bulkDeleteConfirm")}
             </Button>
           </DialogFooter>
         </DialogContent>

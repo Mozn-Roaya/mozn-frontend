@@ -39,15 +39,10 @@ export interface MetricThresholds {
   label: string;
   unit: string;
   perStationOverrides: boolean;
+  /** Region the thresholds belong to — used for the live impact preview. */
+  regionId: string;
   tiers: ThresholdTier[];
   scale: ScaleStop[];
-}
-
-export interface ImpactStation {
-  name: string;
-  tier: string;
-  tone: string;
-  note?: string;
 }
 
 export interface ThresholdChange {
@@ -60,40 +55,29 @@ export interface ThresholdChange {
   when: string;
 }
 
-export type RuleTier = "advisory" | "watch" | "warning";
+/** Comparator for a compound-rule condition (backend: gt/gte/lt/lte/eq). */
+export type CompoundOperator = "gt" | "gte" | "lt" | "lte" | "eq";
 
-/** One condition inside a compound rule (metric + comparator + value). */
+/** One condition inside a compound rule (backend RuleCondition). */
 export interface CompoundCondition {
-  metric: ThresholdMetric;
-  op: ">" | "<" | ">=" | "<=";
+  id?: string;
+  parameter: string;
+  operator: CompoundOperator;
   value: number;
+  sustainMinutes: number | null;
 }
 
-/** A multi-metric rule the MOZN team composes (A3.0 — Compound rules). */
+/** A multi-metric compound rule (A3.0). All conditions must hold to fire. */
 export interface CompoundRule {
   id: string;
   name: string;
-  /** Whether ALL conditions must hold, or ANY one of them (Sentry-style). */
-  match: "all" | "any";
+  regionId: string;
+  severity: "yellow" | "orange" | "red";
+  isActive: boolean;
   conditions: CompoundCondition[];
-  sustainedMin: number;
-  tier: RuleTier;
-  enabled: boolean;
-}
-
-/** A threshold on predicted conditions (A3.0 — Forecast-based tab). */
-export interface ForecastThreshold {
-  id: string;
-  metric: ThresholdMetric;
-  tier: RuleTier;
-  value: string;
-  unit: string;
-  /** Advisory/Watch can auto-trigger pin notifications; Warning needs approval. */
-  autoTrigger: boolean;
 }
 
 export interface ThresholdsPage {
   metrics: MetricThresholds[];
-  impact: { note: string; stations: ImpactStation[] };
   changes: ThresholdChange[];
 }

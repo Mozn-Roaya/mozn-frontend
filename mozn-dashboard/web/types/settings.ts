@@ -28,8 +28,16 @@ export interface ValidationRule {
   rateIntervalMin: number | null;
 }
 
+/** Region option for the default-region picker + validation-rule scoping. */
+export interface SettingsRegion {
+  id: string;
+  name: string;
+}
+
 export interface SettingsPage {
   notifications: NotificationPref[];
   validationNote: string;
   validationRules: ValidationRule[];
+  /** Regions for the default-region picker + region-scoped validation rules. */
+  regions: SettingsRegion[];
 }

@@ -110,6 +110,16 @@ export const users: Record<string, Entry> = {
   "users.toastDeactivated": { en: "{name} deactivated", ar: "تم إلغاء تنشيط {name}" },
   "users.toastRemoved": { en: "Removed {name}", ar: "تمت إزالة {name}" },
   "users.saveFailed": { en: "Action failed", ar: "فشل الإجراء" },
+  "users.bulkActivated": { en: "Activated {count} user(s)", ar: "تم تفعيل {count} مستخدم" },
+  "users.bulkDeactivated": { en: "Deactivated {count} user(s)", ar: "تم تعطيل {count} مستخدم" },
+  "users.bulkDeleted": { en: "Removed {count} user(s)", ar: "تمت إزالة {count} مستخدم" },
+  "users.bulkFailed": { en: "Some actions failed", ar: "فشلت بعض الإجراءات" },
+  "users.bulkDeleteTitle": { en: "Remove selected users?", ar: "إزالة المستخدمين المحددين؟" },
+  "users.bulkDeleteDesc": {
+    en: "This permanently removes {count} user account(s). This cannot be undone.",
+    ar: "سيؤدي هذا إلى إزالة {count} حساب مستخدم نهائياً. لا يمكن التراجع.",
+  },
+  "users.bulkDeleteConfirm": { en: "Remove users", ar: "إزالة المستخدمين" },
   "users.noRegions": { en: "No regions available", ar: "لا توجد مناطق متاحة" },
   "users.editIdentityHint": {
     en: "Name, email, and password can't be changed here — update role, regions, and contact details below.",

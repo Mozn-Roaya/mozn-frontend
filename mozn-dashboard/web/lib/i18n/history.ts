@@ -96,6 +96,17 @@ export const history: Record<string, Entry> = {
     ar: "ستظهر الإجراءات عبر النظام هنا فور حدوثها.",
   },
   "history.activity.view": { en: "View", ar: "عرض" },
+  "history.activity.detailTitle": { en: "Audit entry", ar: "سجل التدقيق" },
+  "history.activity.detailFailed": { en: "Couldn't load this entry.", ar: "تعذّر تحميل هذا السجل." },
+  "history.activity.loading": { en: "Loading…", ar: "جارٍ التحميل…" },
+  "history.activity.detail.resource": { en: "Resource", ar: "المورد" },
+  "history.activity.detail.status": { en: "Status", ar: "الحالة" },
+  "history.activity.detail.ip": { en: "IP address", ar: "عنوان IP" },
+  "history.activity.detail.duration": { en: "Duration", ar: "المدة" },
+  "history.activity.detail.agent": { en: "User agent", ar: "وكيل المستخدم" },
+  "history.activity.detail.error": { en: "Error", ar: "الخطأ" },
+  "history.activity.detail.payload": { en: "Request payload", ar: "حمولة الطلب" },
+  "history.activity.detail.details": { en: "Details", ar: "التفاصيل" },
 
   // Export toasts
   "history.export.nothing": {

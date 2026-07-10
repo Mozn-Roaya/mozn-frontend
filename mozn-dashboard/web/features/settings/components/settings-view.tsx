@@ -9,9 +9,11 @@ import {
   type LucideIcon,
   Palette,
   Pencil,
+  Plus,
   RadioTower,
   RefreshCw,
   ShieldCheck,
+  Trash2,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
@@ -55,10 +57,10 @@ import { useMounted } from "@/hooks/use-mounted";
 import { useLocale } from "@/components/providers/locale-provider";
 import { useRole } from "@/components/providers/role-provider";
 import type { SettingsPage, ValidationRule } from "@/features/settings/types";
+import type { WeatherParameter } from "@/types/shared";
 import {
   DEFAULT_PREFERENCES,
   loadPreferences,
-  REGION_OPTIONS,
   savePreferences,
   type SettingsPreferences,
 } from "@/features/settings/preferences";
@@ -211,6 +213,24 @@ export function SettingsView({ page }: { page: SettingsPage }) {
   // Editable data-validation rules (edited via their own dialog, saved immediately).
   const [rules, setRules] = React.useState<ValidationRule[]>(page.validationRules);
   const [editingRule, setEditingRule] = React.useState<ValidationRule | null>(null);
+  const [creatingRule, setCreatingRule] = React.useState(false);
+  const [deleteTarget, setDeleteTarget] = React.useState<ValidationRule | null>(null);
+  const [ruleParams, setRuleParams] = React.useState<WeatherParameter[]>([]);
+
+  // Parameter catalog for the create dialog (from the backend).
+  React.useEffect(() => {
+    if (!creatingRule || ruleParams.length > 0) return;
+    let alive = true;
+    fetch(`${BASE}/api/parameters`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (alive && j?.data) setRuleParams(j.data as WeatherParameter[]);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [creatingRule, ruleParams.length]);
 
   // Draft preferences. Defaults are deterministic (safe for SSR); persisted
   // values are merged in after mount to avoid a hydration mismatch. `notif` is
@@ -441,11 +461,19 @@ export function SettingsView({ page }: { page: SettingsPage }) {
             </Group>
 
             <div>
-              <div className="pb-3">
-                <h3 className="text-sm font-semibold text-foreground">
-                  {t("settings.validation.groupTitle")}
-                </h3>
-                <p className="text-xs text-muted-foreground">{t("settings.validation.groupDesc")}</p>
+              <div className="flex items-start justify-between gap-3 pb-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">
+                    {t("settings.validation.groupTitle")}
+                  </h3>
+                  <p className="text-xs text-muted-foreground">{t("settings.validation.groupDesc")}</p>
+                </div>
+                {!readOnly ? (
+                  <Button variant="outline" size="sm" className="shrink-0" onClick={() => setCreatingRule(true)}>
+                    <Plus className="size-4" />
+                    {t("settings.validation.addRule")}
+                  </Button>
+                ) : null}
               </div>
               <div className="overflow-hidden rounded-2xl border border-border">
                 <Table>
@@ -491,16 +519,28 @@ export function SettingsView({ page }: { page: SettingsPage }) {
                             )}
                           </TableCell>
                           <TableCell className="text-end">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="size-8"
-                              onClick={() => setEditingRule(rule)}
-                              disabled={readOnly}
-                              aria-label={t("settings.table.edit")}
-                            >
-                              <Pencil className="size-4 text-muted-foreground" />
-                            </Button>
+                            <div className="flex items-center justify-end">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-8"
+                                onClick={() => setEditingRule(rule)}
+                                disabled={readOnly}
+                                aria-label={t("settings.table.edit")}
+                              >
+                                <Pencil className="size-4 text-muted-foreground" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-8 text-muted-foreground hover:text-text-warning"
+                                onClick={() => setDeleteTarget(rule)}
+                                disabled={readOnly}
+                                aria-label={t("settings.validation.delete")}
+                              >
+                                <Trash2 className="size-4" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))
@@ -542,13 +582,13 @@ export function SettingsView({ page }: { page: SettingsPage }) {
               <Select
                 value={prefs.defaultRegion}
                 onValueChange={(v) => update("defaultRegion", v)}
-                disabled={REGION_OPTIONS.length === 0}
+                disabled={page.regions.length === 0}
               >
                 <SelectTrigger id="region" className="w-56">
                   <SelectValue placeholder={t("settings.region.empty")} />
                 </SelectTrigger>
                 <SelectContent>
-                  {REGION_OPTIONS.map((r) => (
+                  {["all", ...page.regions.map((r) => r.name)].map((r) => (
                     <SelectItem key={r} value={r}>
                       {r === "all" ? t("settings.region.all") : td(r)}
                     </SelectItem>
@@ -649,8 +689,8 @@ export function SettingsView({ page }: { page: SettingsPage }) {
           onOpenChange={(open) => !open && setEditingRule(null)}
           onSave={async (next) => {
             if (readOnly) return;
-            // Persist the structured numeric bounds (null clears a bound). The
-            // rule's "active" flag has no backend field, so it is not sent.
+            // Persist the structured numeric bounds (null clears a bound) plus
+            // the active flag (backed by the rule's is_active column).
             const res = await fetch(`${BASE}/api/validation-rules/${next.id}`, {
               method: "PUT",
               headers: { "Content-Type": "application/json" },
@@ -659,6 +699,7 @@ export function SettingsView({ page }: { page: SettingsPage }) {
                 valid_range_max: next.validRangeMax,
                 max_rate_of_change: next.maxRateOfChange,
                 rate_interval_min: next.rateIntervalMin,
+                is_active: next.active,
               }),
             });
             const json = (await res.json().catch(() => ({}))) as { error?: string };
@@ -673,6 +714,71 @@ export function SettingsView({ page }: { page: SettingsPage }) {
           }}
         />
       ) : null}
+
+      {creatingRule ? (
+        <CreateValidationRuleDialog
+          params={ruleParams.filter((p) => p.validation)}
+          regions={page.regions}
+          onOpenChange={(open) => !open && setCreatingRule(false)}
+          onCreate={async (input) => {
+            if (readOnly) return;
+            const res = await fetch(`${BASE}/api/validation-rules`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(input),
+            });
+            const json = (await res.json().catch(() => ({}))) as { error?: string };
+            if (!res.ok) {
+              toast(json.error ?? t("settings.validation.createFailed"), "info");
+              return;
+            }
+            toast(t("settings.validation.created"));
+            setCreatingRule(false);
+            router.refresh();
+          }}
+        />
+      ) : null}
+
+      <Dialog open={deleteTarget !== null} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <DialogContent>
+          <DialogHeader className="flex-row items-center gap-3.5 space-y-0">
+            <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-xl bg-status-warning/10 text-text-warning">
+              <Trash2 className="size-5" />
+            </span>
+            <div className="flex min-w-0 flex-col gap-1">
+              <DialogTitle>{t("settings.validation.deleteTitle")}</DialogTitle>
+              <DialogDescription>
+                {t("settings.validation.deleteDesc", { metric: deleteTarget ? td(deleteTarget.metric) : "" })}
+              </DialogDescription>
+            </div>
+          </DialogHeader>
+          <DialogFooter className="mt-6 border-t border-border-subtle pt-4">
+            <DialogClose asChild>
+              <Button type="button" variant="outline">{t("common.cancel")}</Button>
+            </DialogClose>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={async () => {
+                if (!deleteTarget || readOnly) return;
+                const res = await fetch(`${BASE}/api/validation-rules/${deleteTarget.id}`, { method: "DELETE" });
+                const json = (await res.json().catch(() => ({}))) as { error?: string };
+                if (!res.ok) {
+                  toast(json.error ?? t("settings.validation.deleteFailed"), "info");
+                  return;
+                }
+                setRules((prev) => prev.filter((r) => r.id !== deleteTarget.id));
+                toast(t("settings.validation.deleted"));
+                setDeleteTarget(null);
+                router.refresh();
+              }}
+            >
+              <Trash2 className="size-4" />
+              {t("settings.validation.deleteConfirm")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -918,6 +1024,157 @@ function ValidationRuleDialog({
             <Button type="submit">
               <Check className="size-4" />
               {t("common.save")}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Create a new validation rule: pick a parameter (backend catalog) and set its
+ *  valid range and optional max rate of change. New rules default to active. */
+function CreateValidationRuleDialog({
+  params,
+  regions,
+  onCreate,
+  onOpenChange,
+}: {
+  params: WeatherParameter[];
+  regions: { id: string; name: string }[];
+  onCreate: (input: {
+    parameter: string;
+    region_id: string | null;
+    valid_range_min: number | null;
+    valid_range_max: number | null;
+    max_rate_of_change: number | null;
+    rate_interval_min: number | null;
+  }) => void;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { t, td, locale } = useLocale();
+  const [parameter, setParameter] = React.useState("");
+  const [scope, setScope] = React.useState("global");
+  const [min, setMin] = React.useState("");
+  const [max, setMax] = React.useState("");
+  const [rateOn, setRateOn] = React.useState(false);
+  const [delta, setDelta] = React.useState("");
+  const [rateInterval, setRateInterval] = React.useState("");
+
+  const selected = parameter || params[0]?.key || "";
+  const unit = params.find((p) => p.key === selected)?.unit ?? "";
+  const num = (v: string) => (v.trim() === "" ? null : Number(v));
+
+  return (
+    <Dialog open onOpenChange={onOpenChange}>
+      <DialogContent>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!selected) return;
+            onCreate({
+              parameter: selected,
+              region_id: scope === "global" ? null : scope,
+              valid_range_min: num(min),
+              valid_range_max: num(max),
+              max_rate_of_change: rateOn ? num(delta) : null,
+              rate_interval_min: rateOn ? num(rateInterval) : null,
+            });
+          }}
+        >
+          <DialogHeader className="flex-row items-center gap-3.5 space-y-0">
+            <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-subtle text-brand-foreground">
+              <Plus className="size-5" />
+            </span>
+            <div className="flex min-w-0 flex-col gap-1">
+              <DialogTitle>{t("settings.validation.createTitle")}</DialogTitle>
+              <DialogDescription>{t("settings.validation.createDesc")}</DialogDescription>
+            </div>
+          </DialogHeader>
+
+          <div className="mt-5 grid gap-5">
+            <div className="grid gap-2">
+              <label htmlFor="new-rule-param" className="text-sm font-medium text-foreground">
+                {t("settings.validation.parameter")}
+              </label>
+              <Select value={selected} onValueChange={setParameter}>
+                <SelectTrigger id="new-rule-param" className="w-full">
+                  <SelectValue placeholder={t("settings.validation.parameterPlaceholder")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {params.map((p) => (
+                    <SelectItem key={p.key} value={p.key}>
+                      {locale === "ar" ? p.nameAr : p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid gap-2">
+              <label htmlFor="new-rule-scope" className="text-sm font-medium text-foreground">
+                {t("settings.validation.scope")}
+              </label>
+              <Select value={scope} onValueChange={setScope}>
+                <SelectTrigger id="new-rule-scope" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="global">{t("settings.validation.scopeGlobal")}</SelectItem>
+                  {regions.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>{td(r.name)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">{t("settings.validation.scopeHint")}</p>
+            </div>
+
+            <div className="grid gap-2">
+              <span className="text-sm font-medium text-foreground">{t("settings.table.validRange")}</span>
+              <div className="flex items-end gap-2">
+                <div className="grid flex-1 gap-1.5">
+                  <label className="text-xs text-muted-foreground">{t("settings.validation.rangeFrom")}</label>
+                  <MiniNumber value={min} onChange={setMin} ariaLabel={t("settings.validation.rangeFrom")} />
+                </div>
+                <ArrowRight className="mb-3 size-4 shrink-0 text-muted-foreground rtl:rotate-180" aria-hidden />
+                <div className="grid flex-1 gap-1.5">
+                  <label className="text-xs text-muted-foreground">{t("settings.validation.rangeTo")}</label>
+                  <MiniNumber value={max} onChange={setMax} ariaLabel={t("settings.validation.rangeTo")} />
+                </div>
+                {unit ? <UnitChip>{unit}</UnitChip> : null}
+              </div>
+              <p className="text-xs text-muted-foreground">{t("settings.validation.rangeHint")}</p>
+            </div>
+
+            <div className="grid gap-2 rounded-xl border border-border-subtle bg-secondary/30 p-3">
+              <label className="flex items-center justify-between gap-3">
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium text-foreground">{t("settings.validation.limitRate")}</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">{t("settings.validation.limitRateHint")}</span>
+                </span>
+                <Switch checked={rateOn} onCheckedChange={setRateOn} aria-label={t("settings.validation.limitRate")} />
+              </label>
+              {rateOn ? (
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <div className="w-24">
+                    <MiniNumber value={delta} onChange={setDelta} ariaLabel={t("settings.table.maxRate")} />
+                  </div>
+                  {unit ? <UnitChip>{unit}</UnitChip> : null}
+                  <span className="text-sm text-muted-foreground">{t("settings.validation.ratePer")}</span>
+                  <div className="w-24">
+                    <MiniNumber value={rateInterval} onChange={setRateInterval} ariaLabel={t("settings.validation.ratePer")} />
+                  </div>
+                  <span className="text-sm text-muted-foreground">{t("settings.unit.minutes")}</span>
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          <DialogFooter className="mt-6 border-t border-border-subtle pt-4">
+            <DialogClose asChild>
+              <Button type="button" variant="outline">{t("common.cancel")}</Button>
+            </DialogClose>
+            <Button type="submit" disabled={!selected}>
+              <Plus className="size-4" />
+              {t("settings.validation.createSubmit")}
             </Button>
           </DialogFooter>
         </form>

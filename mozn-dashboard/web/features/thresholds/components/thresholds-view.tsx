@@ -4,9 +4,10 @@ import type { ReactNode } from "react";
 
 import { useT } from "@/components/providers/locale-provider";
 import { Card } from "@/components/ui/card";
-import type { ThresholdsPage } from "@/features/thresholds/types";
+import type { ThresholdsPage, CompoundRule } from "@/features/thresholds/types";
 import type { RegionOption } from "@/types/users";
 import { MetricThresholdsEditor } from "./metric-thresholds-editor";
+import { CompoundRulesManager } from "./compound-rules-manager";
 import { ChangeHistory } from "./change-history";
 
 /** Labelled group giving the screen a scannable hierarchy: an eyebrow `h2` per
@@ -38,9 +39,11 @@ function Section({
 export function ThresholdsView({
   page,
   regionOptions,
+  compoundRules,
 }: {
   page: ThresholdsPage;
   regionOptions: RegionOption[];
+  compoundRules: CompoundRule[];
 }) {
   const t = useT();
 
@@ -52,9 +55,15 @@ export function ThresholdsView({
       >
         <MetricThresholdsEditor
           metrics={page.metrics}
-          impact={page.impact}
           regionOptions={regionOptions}
         />
+      </Section>
+
+      <Section
+        label={t("thresholds.section.compound")}
+        description={t("thresholds.section.compoundDesc")}
+      >
+        <CompoundRulesManager rules={compoundRules} regionOptions={regionOptions} />
       </Section>
 
       <Section label={t("thresholds.history.title")}>

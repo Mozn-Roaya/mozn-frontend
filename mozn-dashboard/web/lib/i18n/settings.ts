@@ -137,6 +137,32 @@ export const settings: Record<string, Entry> = {
     ar: "أوقفها لتعليق هذا الفحص دون حذفه.",
   },
   "settings.validation.saved": { en: "Validation rule updated", ar: "تم تحديث قاعدة التحقق" },
+  "settings.validation.addRule": { en: "Add rule", ar: "إضافة قاعدة" },
+  "settings.validation.createTitle": { en: "New validation rule", ar: "قاعدة تحقق جديدة" },
+  "settings.validation.createDesc": {
+    en: "Bound a parameter's readings. Values outside the range are flagged and withheld from the public map.",
+    ar: "حدِّد نطاق قراءات مقياس. تُعلَّم القيم خارج النطاق وتُحجب عن الخريطة العامة.",
+  },
+  "settings.validation.parameter": { en: "Parameter", ar: "المقياس" },
+  "settings.validation.parameterPlaceholder": { en: "Select a parameter", ar: "اختر مقياساً" },
+  "settings.validation.scope": { en: "Scope", ar: "النطاق" },
+  "settings.validation.scopeGlobal": { en: "Global (all regions)", ar: "عام (كل المناطق)" },
+  "settings.validation.scopeHint": {
+    en: "A region-scoped rule overrides the global rule for that region.",
+    ar: "تتجاوز القاعدة الخاصة بمنطقة القاعدة العامة لتلك المنطقة.",
+  },
+  "settings.validation.createSubmit": { en: "Create rule", ar: "إنشاء القاعدة" },
+  "settings.validation.created": { en: "Validation rule created", ar: "تم إنشاء قاعدة التحقق" },
+  "settings.validation.createFailed": { en: "Couldn't create rule", ar: "تعذّر إنشاء القاعدة" },
+  "settings.validation.delete": { en: "Delete rule", ar: "حذف القاعدة" },
+  "settings.validation.deleteTitle": { en: "Delete validation rule?", ar: "حذف قاعدة التحقق؟" },
+  "settings.validation.deleteDesc": {
+    en: "This removes the “{metric}” rule. Its readings will no longer be bounded.",
+    ar: "سيؤدي هذا إلى إزالة قاعدة «{metric}». لن تُقيَّد قراءاتها بعد الآن.",
+  },
+  "settings.validation.deleteConfirm": { en: "Delete rule", ar: "حذف القاعدة" },
+  "settings.validation.deleted": { en: "Validation rule deleted", ar: "تم حذف قاعدة التحقق" },
+  "settings.validation.deleteFailed": { en: "Couldn't delete rule", ar: "تعذّر حذف القاعدة" },
 
   /* ------------------------------- Live data ----------------------------- */
   "settings.live.title": { en: "Live data", ar: "البيانات الحيّة" },

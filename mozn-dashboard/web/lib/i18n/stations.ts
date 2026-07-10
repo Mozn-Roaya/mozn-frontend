@@ -28,6 +28,18 @@ export const stations: Record<string, Entry> = {
 
   // Row menu
   "stations.editStation": { en: "Edit station", ar: "تعديل المحطة" },
+  "stations.deleteStation": { en: "Delete station", ar: "حذف المحطة" },
+  "stations.deletedToast": {
+    en: 'Station "{name}" deleted',
+    ar: 'حُذفت المحطة "{name}"',
+  },
+  "stations.deleteFailed": { en: "Couldn't delete station", ar: "تعذّر حذف المحطة" },
+  "stations.delete.title": { en: "Delete station?", ar: "حذف المحطة؟" },
+  "stations.delete.desc": {
+    en: "This permanently removes “{name}” and its configuration. This action cannot be undone.",
+    ar: "سيؤدي هذا إلى إزالة «{name}» وإعداداتها نهائيًا. لا يمكن التراجع عن هذا الإجراء.",
+  },
+  "stations.delete.confirm": { en: "Delete station", ar: "حذف المحطة" },
 
   // Empty state — filtered (no match) vs. genuinely empty (no data yet).
   "stations.empty": { en: "No stations match your filters.", ar: "لا توجد محطات تطابق عوامل التصفية." },

@@ -15,6 +15,7 @@ import { NeedsAttention } from "./needs-attention";
 import { RecentActivity } from "./recent-activity";
 import { AlertTrend } from "./alert-trend";
 import { StationStatusDonut } from "./station-status-donut";
+import { RegionRollup } from "./region-rollup";
 
 /** Region-scoped, read-only dashboard for Gov roles (G1). */
 function GovRegionalDashboard({ overview }: { overview: DashboardOverview }) {
@@ -107,8 +108,9 @@ function AdminDashboard({ overview }: { overview: DashboardOverview }) {
         <div className="space-y-6">
           <div className="grid gap-6 md:grid-cols-2">
             <StationStatusDonut stats={overview.stats} />
-            <AlertTrend stats={overview.stats} />
+            <AlertTrend stats={overview.stats} trend={overview.alertTrend} />
           </div>
+          <RegionRollup regions={overview.regions} />
           <RecentActivity items={overview.recentActivity} />
         </div>
       </DashboardSection>

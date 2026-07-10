@@ -30,13 +30,6 @@ export interface SettingsPreferences {
 }
 
 /**
- * Region values are backend data strings (translated via `td`); "all" is local.
- * Empty until the backend supplies the real region list — no fabricated names
- * ship by default.
- */
-export const REGION_OPTIONS: string[] = [];
-
-/**
  * Blank starting point for every operational preference — no fabricated
  * thresholds or picks ship by default. Two kinds of field keep a valid in-type
  * value rather than a literal empty: unit-system toggles (`tempUnit`/`windUnit`,

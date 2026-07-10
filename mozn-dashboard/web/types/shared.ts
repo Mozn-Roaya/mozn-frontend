@@ -47,6 +47,23 @@ export type ActivityCategory =
 export type ThresholdMetric = "rainfall" | "wind" | "water" | "temperature";
 
 /**
+ * A weather parameter from the backend catalog (GET /api/parameters). Sourced
+ * live so the create dropdowns (manual alert, threshold) stay in lockstep with
+ * what the backend actually supports, rather than a hardcoded FE list.
+ */
+export interface WeatherParameter {
+  key: string;
+  name: string;
+  nameAr: string;
+  unit: string;
+  category: string;
+  /** Eligible as a threshold / compound-rule / manual-alert parameter. */
+  alertable: boolean;
+  /** Eligible as a data-validation rule parameter. */
+  validation: boolean;
+}
+
+/**
  * A response-guidance step authored in both site languages. Response steps are
  * admin-authored at runtime (Alert Templates / per-station override), so unlike
  * the seeded alert `actions` they can't rely on the data dictionary — both

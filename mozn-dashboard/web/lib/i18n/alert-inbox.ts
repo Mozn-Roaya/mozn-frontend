@@ -42,6 +42,7 @@ export const alertInbox: Record<string, Entry> = {
 
   // Alert card actions
   "inbox.action.reopen": { en: "Reopen", ar: "إعادة فتح" },
+  "inbox.action.confirm": { en: "Confirm alert", ar: "تأكيد التنبيه" },
   "inbox.action.acknowledge": { en: "Acknowledge", ar: "إقرار" },
   "inbox.action.escalate": { en: "Escalate", ar: "تصعيد" },
   "inbox.action.escalated": { en: "Escalated", ar: "مُصعّد" },
@@ -79,12 +80,23 @@ export const alertInbox: Record<string, Entry> = {
 
   // Toast messages
   "inbox.toast.reopened": { en: "Alert reopened", ar: "تمت إعادة فتح التنبيه" },
+  "inbox.toast.confirmed": { en: "Alert confirmed · published", ar: "تم تأكيد التنبيه · نُشر" },
   "inbox.toast.acknowledged": { en: "Alert acknowledged", ar: "تم الإقرار بالتنبيه" },
   "inbox.toast.escalated": { en: "Escalated to operations", ar: "تم التصعيد إلى العمليات" },
   "inbox.toast.maintenance": {
-    en: "Maintenance scheduled · 4 hours",
-    ar: "تمت جدولة الصيانة · 4 ساعات",
+    en: "Station set to maintenance",
+    ar: "تم تحويل المحطة إلى الصيانة",
   },
   "inbox.toast.dismissed": { en: "Alert dismissed", ar: "تم تجاهل التنبيه" },
   "inbox.toast.failed": { en: "Action failed", ar: "فشل الإجراء" },
+
+  // Bulk actions
+  "inbox.bulk.confirmed": { en: "Confirmed {count} alert(s)", ar: "تم تأكيد {count} تنبيه" },
+  "inbox.bulk.dismissed": { en: "Dismissed {count} alert(s)", ar: "تم تجاهل {count} تنبيه" },
+  "inbox.bulk.failed": { en: "Some actions failed", ar: "فشلت بعض الإجراءات" },
+  "inbox.bulk.dismissTitle": { en: "Dismiss {count} alert(s)?", ar: "تجاهل {count} تنبيه؟" },
+  "inbox.bulk.dismissDesc": {
+    en: "A reason is required and applied to every selected alert.",
+    ar: "السبب مطلوب ويُطبَّق على كل تنبيه محدد.",
+  },
 };

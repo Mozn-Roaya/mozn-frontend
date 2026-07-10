@@ -6,6 +6,7 @@ import {
   ChevronsUp,
   MoreHorizontal,
   RotateCcw,
+  ShieldCheck,
   Trash2,
   Wrench,
 } from "lucide-react";
@@ -31,7 +32,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { TableCell, TableRow, tableBodyRowClass } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { toast } from "@/components/ui/toaster";
 import type { InboxItem } from "@/features/alert-inbox/types";
 import { parseContext, SEVERITY } from "./inbox-meta";
 
@@ -53,6 +53,8 @@ export function InboxAlertRow({
   onReopen,
   onEscalate,
   onDismiss,
+  onConfirm,
+  onSetMaintenance,
   rowClassName,
 }: {
   item: InboxItem;
@@ -65,6 +67,8 @@ export function InboxAlertRow({
   onReopen: (id: string) => void;
   onEscalate: (id: string) => void;
   onDismiss: (id: string, reason: string) => void;
+  onConfirm: (id: string) => void;
+  onSetMaintenance: (stationId: string) => void;
   rowClassName?: string;
 }) {
   const t = useT();
@@ -191,15 +195,24 @@ export function InboxAlertRow({
                       {t("inbox.action.reopen")}
                     </DropdownMenuItem>
                   ) : (
-                    <DropdownMenuItem
-                      disabled={escalated}
-                      onClick={() => onEscalate(item.id)}
-                    >
-                      <ChevronsUp className="size-4" />
-                      {escalated ? t("inbox.action.escalated") : t("inbox.action.escalate")}
-                    </DropdownMenuItem>
+                    <>
+                      <DropdownMenuItem onClick={() => onConfirm(item.id)}>
+                        <ShieldCheck className="size-4" />
+                        {t("inbox.action.confirm")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={escalated}
+                        onClick={() => onEscalate(item.id)}
+                      >
+                        <ChevronsUp className="size-4" />
+                        {escalated ? t("inbox.action.escalated") : t("inbox.action.escalate")}
+                      </DropdownMenuItem>
+                    </>
                   )}
-                  <DropdownMenuItem onClick={() => toast(t("inbox.toast.maintenance"))}>
+                  <DropdownMenuItem
+                    disabled={!item.stationId}
+                    onClick={() => item.stationId && onSetMaintenance(item.stationId)}
+                  >
                     <Wrench className="size-4" />
                     {t("inbox.action.setMaintenance")}
                   </DropdownMenuItem>

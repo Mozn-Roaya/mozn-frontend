@@ -13,6 +13,7 @@ import {
   RotateCcw,
   SearchX,
   ShieldCheck,
+  SlidersHorizontal,
   Thermometer,
   TriangleAlert,
   Wind,
@@ -53,6 +54,13 @@ import {
   tableBodyRowClass,
   tableHeaderRowClass,
 } from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { FacetedFilter } from "@/components/data-table/faceted-filter";
 import { SelectionBar } from "@/components/data-table/selection-bar";
 import { DensityToggle, rowPadFor, type Density } from "@/components/data-table/density-toggle";
@@ -68,6 +76,7 @@ import type {
   ManagedSeverity,
   ManagedStatus,
 } from "@/features/alert-management/types";
+import type { WeatherParameter } from "@/types/shared";
 
 const TYPE_ICON: Record<string, LucideIcon> = {
   rainfall: CloudRain,
@@ -105,18 +114,6 @@ const STATUS_FILTERS: ManagedStatus[] = ["active", "acknowledged", "resolved"];
 
 const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
-// Parameters a manual alert can be raised on (label via paramLabel).
-const ALERT_PARAMS = [
-  "rain_rate_mm",
-  "rain_daily_mm",
-  "wind_speed_kmh",
-  "wind_gust_kmh",
-  "temp_high_c",
-  "temp_low_c",
-  "pressure_hpa",
-  "humidity",
-] as const;
-
 const CREATE_SEVERITIES = ["yellow", "orange", "red"] as const;
 /** backend severity → UI tier label key (yellow=advisory, orange=watch, red=warning). */
 const SEVERITY_TIER: Record<(typeof CREATE_SEVERITIES)[number], string> = {
@@ -145,7 +142,7 @@ const EMPTY_ALERT: CreateAlertDraft = {
 type SortKey = "severity" | "type" | "trigger" | "duration" | "status";
 
 export function AlertManagementView({ initialAlerts }: { initialAlerts: ManagedAlert[] }) {
-  const { t, td } = useLocale();
+  const { t, td, locale } = useLocale();
   const router = useRouter();
   const { readOnly, can } = useRole();
   // Server-rendered live data is the source of truth; after each action we
@@ -156,26 +153,43 @@ export function AlertManagementView({ initialAlerts }: { initialAlerts: ManagedA
   const [createOpen, setCreateOpen] = React.useState(false);
   const [alertDraft, setAlertDraft] = React.useState<CreateAlertDraft>(EMPTY_ALERT);
   const [stationOpts, setStationOpts] = React.useState<{ id: string; name: string }[]>([]);
+  const [paramOpts, setParamOpts] = React.useState<WeatherParameter[]>([]);
   const [creating, setCreating] = React.useState(false);
 
-  // Load the station list (for the create dialog's station select) on first open.
+  // Load the station list + parameter catalog (for the create dialog's selects)
+  // on first open.
   React.useEffect(() => {
-    if (!createOpen || stationOpts.length > 0) return;
+    if (!createOpen) return;
     let alive = true;
-    fetch(`${BASE}/api/stations`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((page) => {
-        if (!alive || !page?.groups) return;
-        const rows = (page.groups as { rows: { id: string; name: string }[] }[])
-          .flatMap((g) => g.rows)
-          .map((r) => ({ id: r.id, name: r.name }));
-        setStationOpts(rows);
-      })
-      .catch(() => {});
+    if (stationOpts.length === 0) {
+      fetch(`${BASE}/api/stations`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((page) => {
+          if (!alive || !page?.groups) return;
+          const rows = (page.groups as { rows: { id: string; name: string }[] }[])
+            .flatMap((g) => g.rows)
+            .map((r) => ({ id: r.id, name: r.name }));
+          setStationOpts(rows);
+        })
+        .catch(() => {});
+    }
+    if (paramOpts.length === 0) {
+      fetch(`${BASE}/api/parameters`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => {
+          if (alive && j?.data) setParamOpts(j.data as WeatherParameter[]);
+        })
+        .catch(() => {});
+    }
     return () => {
       alive = false;
     };
-  }, [createOpen, stationOpts.length]);
+  }, [createOpen, stationOpts.length, paramOpts.length]);
+
+  // Manual alerts target the same parameters thresholds do (alertable set).
+  const alertParamOpts = paramOpts.filter((p) => p.alertable);
+  const draftParamUnit =
+    paramOpts.find((p) => p.key === alertDraft.parameter)?.unit ?? "";
 
   const submitCreate = async () => {
     const d = alertDraft;
@@ -237,6 +251,31 @@ export function AlertManagementView({ initialAlerts }: { initialAlerts: ManagedA
           return;
         }
         toast(action === "resolve" ? t("alertmgmt.toast.resolved") : t("alertmgmt.toast.reopened"));
+        router.refresh();
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [router, t],
+  );
+
+  // Change an alert's severity via PUT /api/alerts/:id/modify (routed as a POST
+  // to the [action] handler, which forwards a PUT to the backend).
+  const changeSeverity = React.useCallback(
+    async (id: string, severity: (typeof CREATE_SEVERITIES)[number]) => {
+      setBusyId(id);
+      try {
+        const res = await fetch(`${BASE}/api/alerts/${id}/modify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ severity }),
+        });
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) {
+          toast(json.error ?? t("alertmgmt.toast.failed"), "info");
+          return;
+        }
+        toast(t("alertmgmt.toast.severity", { tier: t("severity." + SEVERITY_TIER[severity]) }));
         router.refresh();
       } finally {
         setBusyId(null);
@@ -454,14 +493,43 @@ export function AlertManagementView({ initialAlerts }: { initialAlerts: ManagedA
                             {t("alertmgmt.action.reopen")}
                           </Button>
                         ) : (
-                          <Button
-                            size="sm"
-                            onClick={() => { setReason(""); setResolveTarget(a); }}
-                            disabled={busyId === a.id}
-                          >
-                            <CircleCheck className="size-4" />
-                            {t("alertmgmt.action.resolve")}
-                          </Button>
+                          <>
+                            <Button
+                              size="sm"
+                              onClick={() => { setReason(""); setResolveTarget(a); }}
+                              disabled={busyId === a.id}
+                            >
+                              <CircleCheck className="size-4" />
+                              {t("alertmgmt.action.resolve")}
+                            </Button>
+                            {can("alerts.modify") ? (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="size-8 text-muted-foreground"
+                                    disabled={busyId === a.id}
+                                    aria-label={t("alertmgmt.action.more")}
+                                  >
+                                    <SlidersHorizontal className="size-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuLabel>{t("alertmgmt.action.severity")}</DropdownMenuLabel>
+                                  {CREATE_SEVERITIES.map((s) => (
+                                    <DropdownMenuItem
+                                      key={s}
+                                      disabled={busyId === a.id}
+                                      onClick={() => changeSeverity(a.id, s)}
+                                    >
+                                      <SeverityBadge severity={SEVERITY_TIER[s] as ManagedSeverity} />
+                                    </DropdownMenuItem>
+                                  ))}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            ) : null}
+                          </>
                         )}
                       </div>
                     </TableCell>
@@ -558,7 +626,15 @@ export function AlertManagementView({ initialAlerts }: { initialAlerts: ManagedA
                   <Select value={alertDraft.parameter} onValueChange={(v) => setAlertDraft((d) => ({ ...d, parameter: v }))}>
                     <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {ALERT_PARAMS.map((p) => <SelectItem key={p} value={p}>{paramLabel(p)}</SelectItem>)}
+                      {alertParamOpts.length === 0 ? (
+                        <SelectItem value={alertDraft.parameter}>{paramLabel(alertDraft.parameter)}</SelectItem>
+                      ) : (
+                        alertParamOpts.map((p) => (
+                          <SelectItem key={p.key} value={p.key}>
+                            {locale === "ar" ? p.nameAr : p.name}
+                          </SelectItem>
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -576,7 +652,12 @@ export function AlertManagementView({ initialAlerts }: { initialAlerts: ManagedA
                 <label htmlFor="alert-value" className="text-sm font-medium text-foreground">
                   {t("alertmgmt.create.value")} <span className="font-normal text-muted-foreground">{t("alertmgmt.create.optional")}</span>
                 </label>
-                <Input id="alert-value" type="number" inputMode="decimal" dir="ltr" value={alertDraft.value} onChange={(e) => setAlertDraft((d) => ({ ...d, value: e.target.value }))} />
+                <div dir="ltr" className="relative">
+                  <Input id="alert-value" type="number" inputMode="decimal" dir="ltr" value={alertDraft.value} onChange={(e) => setAlertDraft((d) => ({ ...d, value: e.target.value }))} className={draftParamUnit ? "pe-14 tabular-nums" : "tabular-nums"} />
+                  {draftParamUnit ? (
+                    <span className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">{draftParamUnit}</span>
+                  ) : null}
+                </div>
               </div>
               <div className="grid gap-2">
                 <label htmlFor="alert-msg" className="text-sm font-medium text-foreground">

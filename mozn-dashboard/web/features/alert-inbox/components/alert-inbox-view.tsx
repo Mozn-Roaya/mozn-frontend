@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Inbox, SearchX } from "lucide-react";
+import { Inbox, SearchX, ShieldCheck, Trash2 } from "lucide-react";
 
 import { EmptyState } from "@/components/common/empty-state";
 import { toast } from "@/components/ui/toaster";
@@ -10,6 +10,16 @@ import { useRole } from "@/components/providers/role-provider";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { SearchInput } from "@/components/common/search-input";
 import {
   Table,
@@ -123,6 +133,37 @@ export function AlertInboxView({ page }: { page: AlertInboxPage }) {
     toast(t("inbox.toast.dismissed"), "info");
     router.refresh();
   };
+  // Confirm a pending alert = promote it to a confirmed, citizen-visible alert.
+  const confirm = async (id: string) => {
+    const res = await fetch(`${BASE}/api/alerts/${id}/confirm`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    if (!res.ok) {
+      toast(json.error ?? t("inbox.toast.failed"), "info");
+      return;
+    }
+    toast(t("inbox.toast.confirmed"));
+    router.refresh();
+  };
+  // Put the alert's station into maintenance (routes through the station PUT —
+  // maintenance is a station status, not an alert one).
+  const setMaintenance = async (stationId: string) => {
+    const res = await fetch(`${BASE}/api/stations/${stationId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ operational_status: "maintenance" }),
+    });
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    if (!res.ok) {
+      toast(json.error ?? t("inbox.toast.failed"), "info");
+      return;
+    }
+    toast(t("inbox.toast.maintenance"));
+    router.refresh();
+  };
   const escalate = async (id: string) => {
     const item = page.items.find((i) => i.id === id);
     const next = item?.severity === "routine" ? "urgent" : "critical";
@@ -201,6 +242,65 @@ export function AlertInboxView({ page }: { page: AlertInboxPage }) {
       return next;
     });
 
+  // ── Bulk triage over the selection ───────────────────────────────────────
+  const [bulkBusy, setBulkBusy] = React.useState(false);
+  const [bulkDismissOpen, setBulkDismissOpen] = React.useState(false);
+  const [bulkReason, setBulkReason] = React.useState("");
+
+  const bulkConfirm = async () => {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    setBulkBusy(true);
+    const results = await Promise.all(
+      ids.map((id) =>
+        fetch(`${BASE}/api/alerts/${id}/confirm`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+        })
+          .then((r) => r.ok)
+          .catch(() => false),
+      ),
+    );
+    setBulkBusy(false);
+    const failed = results.filter((ok) => !ok).length;
+    toast(
+      failed ? t("inbox.bulk.failed") : t("inbox.bulk.confirmed", { count: ids.length }),
+      failed ? "info" : "success",
+    );
+    setSelected(new Set());
+    router.refresh();
+  };
+
+  const bulkDismiss = async () => {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    const reason = bulkReason.trim();
+    if (!reason) return;
+    setBulkBusy(true);
+    const results = await Promise.all(
+      ids.map((id) =>
+        fetch(`${BASE}/api/alerts/${id}/reject`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ note: reason }),
+        })
+          .then((r) => r.ok)
+          .catch(() => false),
+      ),
+    );
+    setBulkBusy(false);
+    const failed = results.filter((ok) => !ok).length;
+    toast(
+      failed ? t("inbox.bulk.failed") : t("inbox.bulk.dismissed", { count: ids.length }),
+      failed ? "info" : "success",
+    );
+    setBulkDismissOpen(false);
+    setBulkReason("");
+    setSelected(new Set());
+    router.refresh();
+  };
+
   // Reset to page 1 when the filter set changes — adjusted during render (the
   // pattern used elsewhere in the app) rather than in an effect, so it commits
   // once with no flash of the pre-reset page.
@@ -260,7 +360,26 @@ export function AlertInboxView({ page }: { page: AlertInboxPage }) {
         )
       ) : (
         <>
-          <SelectionBar count={selected.size} onClear={() => setSelected(new Set())} />
+          <SelectionBar count={selected.size} onClear={() => setSelected(new Set())}>
+            {!readOnly ? (
+              <>
+                <Button size="sm" variant="outline" className="h-8" onClick={bulkConfirm} disabled={bulkBusy}>
+                  <ShieldCheck className="size-3.5" />
+                  {t("inbox.action.confirm")}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-text-warning hover:text-text-warning"
+                  onClick={() => setBulkDismissOpen(true)}
+                  disabled={bulkBusy}
+                >
+                  <Trash2 className="size-3.5" />
+                  {t("inbox.action.dismiss")}
+                </Button>
+              </>
+            ) : null}
+          </SelectionBar>
           <Table>
             <TableHeader>
               <TableRow className={tableHeaderRowClass}>
@@ -309,6 +428,8 @@ export function AlertInboxView({ page }: { page: AlertInboxPage }) {
                   onReopen={reopen}
                   onEscalate={escalate}
                   onDismiss={dismiss}
+                  onConfirm={confirm}
+                  onSetMaintenance={setMaintenance}
                   rowClassName={rowPad}
                 />
               ))}
@@ -326,6 +447,45 @@ export function AlertInboxView({ page }: { page: AlertInboxPage }) {
           />
         </>
       )}
+
+      {/* Bulk dismiss — shared reason applied to every selected alert. */}
+      <Dialog open={bulkDismissOpen} onOpenChange={(o) => { setBulkDismissOpen(o); if (!o) setBulkReason(""); }}>
+        <DialogContent>
+          <form onSubmit={(e) => { e.preventDefault(); void bulkDismiss(); }}>
+            <DialogHeader className="flex-row items-center gap-3.5 space-y-0">
+              <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-xl bg-status-warning/10 text-text-warning">
+                <Trash2 className="size-5" />
+              </span>
+              <div className="flex min-w-0 flex-col gap-1">
+                <DialogTitle>{t("inbox.bulk.dismissTitle", { count: selected.size })}</DialogTitle>
+                <DialogDescription>{t("inbox.bulk.dismissDesc")}</DialogDescription>
+              </div>
+            </DialogHeader>
+            <div className="mt-5 grid gap-2">
+              <label htmlFor="bulk-dismiss-reason" className="text-sm font-medium text-foreground">
+                {t("inbox.dismiss.reasonLabel")} <span className="text-destructive">*</span>
+              </label>
+              <Textarea
+                id="bulk-dismiss-reason"
+                value={bulkReason}
+                onChange={(e) => setBulkReason(e.target.value)}
+                placeholder={t("inbox.dismiss.reasonPlaceholder")}
+                rows={3}
+                autoFocus
+              />
+            </div>
+            <DialogFooter className="mt-6 border-t border-border-subtle pt-4">
+              <DialogClose asChild>
+                <Button type="button" variant="outline">{t("common.cancel")}</Button>
+              </DialogClose>
+              <Button type="submit" variant="destructive" disabled={!bulkReason.trim() || bulkBusy}>
+                <Trash2 className="size-4" />
+                {t("inbox.action.dismiss")}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

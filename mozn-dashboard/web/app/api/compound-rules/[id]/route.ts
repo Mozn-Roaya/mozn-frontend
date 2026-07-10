@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { ApiError, deleteValidationRule, updateValidationRule } from "@/lib/api";
+import { ApiError, deleteCompoundRule, updateCompoundRule } from "@/lib/api";
+import type { CompoundRuleWriteInput } from "@/lib/api";
 
 /**
- * PUT    /dashboard/api/validation-rules/:id — edit range / max rate / active.
- * DELETE /dashboard/api/validation-rules/:id — remove a rule.
+ * PUT    /dashboard/api/compound-rules/:id — edit a compound rule.
+ * DELETE /dashboard/api/compound-rules/:id — remove one.
  */
 export const dynamic = "force-dynamic";
 
@@ -12,23 +13,17 @@ type Params = { params: Promise<{ id: string }> };
 
 export async function PUT(req: NextRequest, { params }: Params) {
   const { id } = await params;
-  let body: {
-    valid_range_min?: number | null;
-    valid_range_max?: number | null;
-    max_rate_of_change?: number | null;
-    rate_interval_min?: number | null;
-    is_active?: boolean;
-  };
+  let body: Partial<CompoundRuleWriteInput>;
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
   try {
-    const result = await updateValidationRule(id, body);
+    const result = await updateCompoundRule(id, body);
     if (!result.ok) {
       return NextResponse.json(
-        { error: result.message ?? "Failed to update validation rule" },
+        { error: result.message ?? "Failed to update compound rule" },
         { status: result.status || 502 },
       );
     }
@@ -36,7 +31,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   } catch (err) {
     const status = err instanceof ApiError ? err.status ?? 502 : 500;
     return NextResponse.json(
-      { error: status === 401 ? "Not authenticated" : "Failed to update validation rule" },
+      { error: status === 401 ? "Not authenticated" : "Failed to update compound rule" },
       { status },
     );
   }
@@ -45,10 +40,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
 export async function DELETE(_req: NextRequest, { params }: Params) {
   const { id } = await params;
   try {
-    const result = await deleteValidationRule(id);
+    const result = await deleteCompoundRule(id);
     if (!result.ok) {
       return NextResponse.json(
-        { error: result.message ?? "Failed to delete validation rule" },
+        { error: result.message ?? "Failed to delete compound rule" },
         { status: result.status || 502 },
       );
     }
@@ -56,7 +51,7 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   } catch (err) {
     const status = err instanceof ApiError ? err.status ?? 502 : 500;
     return NextResponse.json(
-      { error: status === 401 ? "Not authenticated" : "Failed to delete validation rule" },
+      { error: status === 401 ? "Not authenticated" : "Failed to delete compound rule" },
       { status },
     );
   }

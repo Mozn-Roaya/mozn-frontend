@@ -197,6 +197,10 @@ export interface BackendAuditLog {
   user_agent: string;
   duration_ms: number;
   created_at: string;
+  /** Present on the detail endpoint (GET /api/audit-logs/:id); omitted by the list. */
+  request_payload?: unknown;
+  response_error?: string | null;
+  details?: unknown;
 }
 
 export interface BackendSystemSetting {
@@ -225,6 +229,48 @@ export interface BackendValidationRule {
   valid_range_max?: number | null;
   max_rate_of_change?: number | null;
   rate_interval_min?: number | null;
+  is_active?: boolean;
+}
+
+/** GET /api/compound-rules (models.CompoundRule). */
+export interface BackendRuleCondition {
+  id: string;
+  parameter: string;
+  operator: "gt" | "gte" | "lt" | "lte" | "eq";
+  value: number;
+  sustain_minutes?: number | null;
+}
+
+export interface BackendCompoundRule {
+  id: string;
+  name: string;
+  region_id: string;
+  severity: "yellow" | "orange" | "red";
+  is_active: boolean;
+  conditions: BackendRuleCondition[];
+}
+
+/** GET /api/forecasts?station_id= (models.WeatherForecast) — one row per hour. */
+export interface BackendWeatherForecast {
+  forecast_for: string;
+  station_id: string;
+  temp_c?: number | null;
+  humidity?: number | null;
+  wind_speed_kmh?: number | null;
+  wind_gust_kmh?: number | null;
+  rain_rate_mm?: number | null;
+}
+
+/** GET /api/parameters (controller.parameterInfo). */
+export interface BackendParameter {
+  key: string;
+  name: string;
+  name_ar: string;
+  unit: string;
+  description: string;
+  category: string;
+  alertable?: boolean;
+  validation?: boolean;
 }
 
 /** GET /api/dashboard/stats (services.DashboardStats). */

@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { useT, useTD } from "@/components/providers/locale-provider";
+import { useLocale, useT, useTD } from "@/components/providers/locale-provider";
 import { useRole } from "@/components/providers/role-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -45,9 +45,9 @@ import { paramLabel, paramUnit } from "@/lib/mappers";
 import type {
   MetricThresholds,
   ThresholdMetric,
-  ThresholdsPage,
 } from "@/features/thresholds/types";
 import type { RegionOption } from "@/types/users";
+import type { WeatherParameter } from "@/types/shared";
 import { TierScaleBar } from "./tier-scale-bar";
 
 const METRIC_ICON: Record<ThresholdMetric, LucideIcon> = {
@@ -72,19 +72,6 @@ const TIER_TO_SEVERITY: Record<Tier, "yellow" | "orange" | "red"> = {
   watch: "orange",
   warning: "red",
 };
-
-/** Backend parameters the create dialog offers (label via paramLabel). The
- *  "water" UI metric has no backend parameter, so no water params appear here. */
-const CREATE_PARAMS = [
-  "rain_rate_mm",
-  "rain_daily_mm",
-  "wind_speed_kmh",
-  "wind_gust_kmh",
-  "temp_high_c",
-  "temp_low_c",
-  "pressure_hpa",
-  "humidity",
-] as const;
 
 const APPLIES_TO = ["observed", "forecast", "both"] as const;
 type AppliesTo = (typeof APPLIES_TO)[number];
@@ -137,15 +124,14 @@ function toValues(m: MetricThresholds): MetricValues {
 
 export function MetricThresholdsEditor({
   metrics,
-  impact,
   regionOptions,
 }: {
   metrics: MetricThresholds[];
-  impact: ThresholdsPage["impact"];
   regionOptions: RegionOption[];
 }) {
   const t = useT();
   const td = useTD();
+  const { locale } = useLocale();
   const router = useRouter();
   const { readOnly, can } = useRole();
   const [saving, setSaving] = React.useState(false);
@@ -159,11 +145,65 @@ export function MetricThresholdsEditor({
   // non-blocking impact preview) and per-tier delete confirmation.
   const [createOpen, setCreateOpen] = React.useState(false);
   const [createDraft, setCreateDraft] = React.useState<CreateDraft>(EMPTY_CREATE);
+  const [paramOpts, setParamOpts] = React.useState<WeatherParameter[]>([]);
   const [preview, setPreview] = React.useState<PreviewResult | null>(null);
+
+  // Parameter catalog for the create dialog — sourced from the backend
+  // (GET /api/parameters) instead of a hardcoded list.
+  React.useEffect(() => {
+    if (!createOpen || paramOpts.length > 0) return;
+    let alive = true;
+    fetch(`${BASE}/api/parameters`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (alive && j?.data) setParamOpts(j.data as WeatherParameter[]);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [createOpen, paramOpts.length]);
   const [previewing, setPreviewing] = React.useState(false);
   const [creating, setCreating] = React.useState(false);
   const [pendingDelete, setPendingDelete] = React.useState<{ id: string; tier: Tier } | null>(null);
   const [deleting, setDeleting] = React.useState(false);
+
+  // Live "stations affected" for the footer — dry-run the selected metric's
+  // Warning tier against /preview whenever the metric or its value changes
+  // (replaces the old hardcoded-empty impact payload). Debounced + abortable.
+  const [footerImpact, setFooterImpact] = React.useState<number | null>(null);
+  React.useEffect(() => {
+    const m = metrics.find((mm) => mm.metric === selected) ?? metrics[0];
+    const warnTier = m?.tiers.find((tr) => tr.name.toLowerCase() === "warning");
+    const regionId = m?.regionId ?? "";
+    const param = warnTier?.parameter ?? "";
+    const warnValue = m ? values[m.metric]?.warning : undefined;
+    if (!regionId || !param || warnValue == null || !Number.isFinite(warnValue)) {
+      /* eslint-disable-next-line react-hooks/set-state-in-effect -- reset when inputs are incomplete */
+      setFooterImpact(null);
+      return;
+    }
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => {
+      fetch(`${BASE}/api/thresholds/preview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ region_id: regionId, parameter: param, value: warnValue }),
+        signal: ctrl.signal,
+      })
+        .then(async (r) => ((await r.json().catch(() => ({}))) as { data?: PreviewResult }))
+        .then((json) => {
+          setFooterImpact(json.data ? json.data.affected_station_count : null);
+        })
+        .catch(() => {
+          /* aborted or failed — keep the prior value */
+        });
+    }, 400);
+    return () => {
+      ctrl.abort();
+      clearTimeout(timer);
+    };
+  }, [metrics, selected, values]);
 
   // Empty backend payload: nothing to select or edit. Bail out before any of
   // the lookups below, which all assume at least one metric exists.
@@ -193,8 +233,6 @@ export function MetricThresholdsEditor({
     const lb = lowerBound(tier);
     return lb !== null && v[tier] <= lb;
   };
-
-  const impactCount = impact.note.match(/\d+/)?.[0] ?? String(impact.stations.length);
 
   // Save each CHANGED tier value via PUT /api/thresholds/:id (each tier carries
   // its backend row id). Parameter/severity/region are immutable server-side, so
@@ -492,7 +530,9 @@ export function MetricThresholdsEditor({
       <div className="flex flex-col gap-3 border-t border-border-subtle p-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="flex items-center gap-1.5 text-sm font-medium text-foreground">
           <TriangleAlert className="size-4 shrink-0 text-status-advisory" aria-hidden />
-          {t("thresholds.impact.note", { count: impactCount })}
+          {footerImpact == null
+            ? t("thresholds.impact.calculating")
+            : t("thresholds.impact.note", { count: footerImpact })}
         </p>
         <Button className="shrink-0" onClick={save} disabled={readOnly || saving || anyInvalid}>
           <Check className="size-4" />
@@ -571,11 +611,19 @@ export function MetricThresholdsEditor({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {CREATE_PARAMS.map((p) => (
-                      <SelectItem key={p} value={p}>
-                        {paramLabel(p)}
+                    {paramOpts.filter((p) => p.alertable).length === 0 ? (
+                      <SelectItem value={createDraft.parameter}>
+                        {paramLabel(createDraft.parameter)}
                       </SelectItem>
-                    ))}
+                    ) : (
+                      paramOpts
+                        .filter((p) => p.alertable)
+                        .map((p) => (
+                          <SelectItem key={p.key} value={p.key}>
+                            {locale === "ar" ? p.nameAr : p.name}
+                          </SelectItem>
+                        ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -597,7 +645,8 @@ export function MetricThresholdsEditor({
                     placeholder="0"
                   />
                   <span className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">
-                    {paramUnit(createDraft.parameter)}
+                    {paramOpts.find((p) => p.key === createDraft.parameter)?.unit ??
+                      paramUnit(createDraft.parameter)}
                   </span>
                 </div>
               </div>

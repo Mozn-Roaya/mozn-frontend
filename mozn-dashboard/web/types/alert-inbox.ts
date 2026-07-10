@@ -23,6 +23,8 @@ export interface InboxItem {
   id: string;
   severity: InboxSeverity;
   title: string;
+  /** Station the alert belongs to — enables the row's "set maintenance" action. */
+  stationId?: string;
   context: string;
   timeAgo: string;
   sla: { label: string; tone: SlaTone };

@@ -14,19 +14,20 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
-import type { StatCard } from "@/features/dashboard/types";
+import type { AlertTrendPoint, StatCard } from "@/features/dashboard/types";
 import { ChartCard } from "./chart-card";
 
-// Single real series: the live active-alert total. There is no backend-exposed
-// alerts-opened-per-day history to chart, so this renders one "Now" bar from
-// the real count instead of a fabricated multi-day/severity breakdown.
+// The alerts-opened-per-day series over the last 7 days (bucketed server-side in
+// getDashboardOverview), plus the live active-alert total for the headline.
 const ALERT_COLOR = "var(--status-warning)";
 
 export function AlertTrend({
   stats,
+  trend,
   className,
 }: {
   stats: StatCard[];
+  trend: AlertTrendPoint[];
   className?: string;
 }) {
   const { t, locale } = useLocale();
@@ -42,15 +43,21 @@ export function AlertTrend({
     [stats],
   );
 
-  // A single real data point: the current active-alert count. There is no
-  // per-day history to plot, so an empty total means there is nothing to
-  // chart at all (see the EmptyState branch below).
+  // One bar per day, weekday-labelled in the active locale.
   const data = React.useMemo(
-    () => [{ label: t("dashboard.alertTrend.now"), total }],
-    [total, t],
+    () =>
+      trend.map((p) => ({
+        label: new Date(p.date + "T00:00:00").toLocaleDateString(rtl ? "ar" : "en", {
+          weekday: "short",
+        }),
+        total: p.count,
+      })),
+    [trend, rtl],
   );
 
-  const max = Math.max(2, Math.ceil(total / 2) * 2);
+  const trendTotal = React.useMemo(() => trend.reduce((sum, p) => sum + p.count, 0), [trend]);
+  const peak = React.useMemo(() => Math.max(0, ...trend.map((p) => p.count)), [trend]);
+  const max = Math.max(2, Math.ceil(peak / 2) * 2);
 
   const yTicks = React.useMemo(() => {
     const ticks: number[] = [];
@@ -61,14 +68,14 @@ export function AlertTrend({
   const config = React.useMemo(
     () =>
       ({
-        total: { label: t("dashboard.alertTrend.active"), color: ALERT_COLOR },
+        total: { label: t("dashboard.alertTrend.opened"), color: ALERT_COLOR },
       }) satisfies ChartConfig,
     [t],
   );
 
   return (
     <ChartCard title={t("dashboard.alertTrend.title")} className={className}>
-      {total === 0 ? (
+      {trendTotal === 0 && total === 0 ? (
         <EmptyState icon={TrendingUp} message={t("dashboard.alertTrend.empty")} />
       ) : (
         <div className="flex h-full flex-col">

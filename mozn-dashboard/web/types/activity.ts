@@ -30,3 +30,20 @@ export interface ActivityLogPage {
   users: string[];
   groups: ActivityDayGroup[];
 }
+
+/** Full audit-log entry for the per-row detail view (GET /api/audit-logs/:id). */
+export interface AuditLogDetail {
+  id: string;
+  action: string;
+  resourceType: string;
+  resourceId: string | null;
+  status: string;
+  statusCode: number;
+  ipAddress: string;
+  userAgent: string;
+  durationMs: number;
+  createdAt: string;
+  requestPayload: unknown;
+  responseError: string | null;
+  details: unknown;
+}

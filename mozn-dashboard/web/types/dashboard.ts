@@ -114,6 +114,13 @@ export interface RegionStat {
   total: number;
 }
 
+/** One day's count of alerts opened, for the 7-day alert-trend chart. */
+export interface AlertTrendPoint {
+  /** ISO date bucket (yyyy-mm-dd); the chart localizes the weekday label. */
+  date: string;
+  count: number;
+}
+
 export interface DashboardHeader {
   title: string;
   statusLabel: string;
@@ -127,4 +134,5 @@ export interface DashboardOverview {
   needsAttention: NeedsAttention;
   recentActivity: ActivityItem[];
   regions: RegionStat[];
+  alertTrend: AlertTrendPoint[];
 }

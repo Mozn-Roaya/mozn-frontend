@@ -3,7 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   acknowledgeAlert,
   ApiError,
+  confirmAlert,
   escalateAlert,
+  modifyAlert,
   rejectAlert,
   reopenAlert,
   resolveAlert,
@@ -27,7 +29,15 @@ type Params = { params: Promise<{ id: string; action: string }> };
 export async function POST(req: NextRequest, { params }: Params) {
   const { id, action } = await params;
 
-  let body: { reason?: string; note?: string; urgency?: string } = {};
+  let body: {
+    reason?: string;
+    note?: string;
+    urgency?: string;
+    severity?: string;
+    level?: string;
+    message?: string;
+    message_ar?: string;
+  } = {};
   try {
     body = await req.json();
   } catch {
@@ -54,6 +64,17 @@ export async function POST(req: NextRequest, { params }: Params) {
         break;
       case "escalate":
         result = await escalateAlert(id, body.urgency ?? "urgent");
+        break;
+      case "confirm":
+        result = await confirmAlert(id, body.note);
+        break;
+      case "modify":
+        result = await modifyAlert(id, {
+          severity: body.severity,
+          level: body.level,
+          message: body.message,
+          message_ar: body.message_ar,
+        });
         break;
       default:
         return NextResponse.json({ error: "Unknown action" }, { status: 404 });

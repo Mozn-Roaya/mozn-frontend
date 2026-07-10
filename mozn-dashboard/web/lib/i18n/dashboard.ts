@@ -103,6 +103,7 @@ export const dashboard: Record<string, Entry> = {
   "dashboard.station.day.wed": { en: "Wed", ar: "الأربعاء" },
   "dashboard.station.day.thu": { en: "Thu", ar: "الخميس" },
   "dashboard.station.day.fri": { en: "Fri", ar: "الجمعة" },
+  "dashboard.station.day.sat": { en: "Sat", ar: "السبت" },
 
   // Needs attention
   "dashboard.needsAttention.title": { en: "Needs attention", ar: "بحاجة إلى انتباه" },
@@ -143,13 +144,21 @@ export const dashboard: Record<string, Entry> = {
   // Alerts by severity
   "dashboard.alertTrend.title": { en: "Alert trend", ar: "اتجاه التنبيهات" },
   "dashboard.alertTrend.subtitle": {
-    en: "Active alerts right now",
-    ar: "التنبيهات النشطة الآن",
+    en: "Alerts opened over the last 7 days",
+    ar: "التنبيهات الصادرة خلال آخر 7 أيام",
   },
   "dashboard.alertTrend.active": { en: "active now", ar: "نشطة الآن" },
+  "dashboard.alertTrend.opened": { en: "opened", ar: "صادرة" },
   "dashboard.alertTrend.now": { en: "Now", ar: "الآن" },
   "dashboard.alertTrend.empty": {
     en: "No active alerts to chart.",
     ar: "لا توجد تنبيهات نشطة لعرضها.",
+  },
+
+  // Stations by region rollup
+  "dashboard.regions.title": { en: "Stations by region", ar: "المحطات حسب المنطقة" },
+  "dashboard.regions.empty": {
+    en: "No regions configured yet.",
+    ar: "لا توجد مناطق مُعدّة بعد.",
   },
 };

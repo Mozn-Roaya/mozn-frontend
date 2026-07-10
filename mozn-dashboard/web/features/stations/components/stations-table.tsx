@@ -11,6 +11,7 @@ import {
   Rows3,
   Search,
   SearchX,
+  Trash2,
   Wrench,
 } from "lucide-react";
 
@@ -65,6 +66,15 @@ import type {
   StationsPage,
 } from "@/features/stations/types";
 import { BatteryMeter, SignalBars } from "./station-meters";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Sheet,
   SheetContent,
@@ -145,6 +155,9 @@ export function StationsTable({ page }: { page: StationsPage }) {
   const [detailRow, setDetailRow] = React.useState<Row | null>(null);
   // Station whose hardware live view is open (A2.3). Edit navigates to a page.
   const [liveRow, setLiveRow] = React.useState<Row | null>(null);
+  // Station pending delete-confirmation.
+  const [deleteRow, setDeleteRow] = React.useState<Row | null>(null);
+  const [deleting, setDeleting] = React.useState(false);
 
   // Faceted status filter options: real statuses only (empty selection = all),
   // each with its colored dot and count.
@@ -265,6 +278,31 @@ export function StationsTable({ page }: { page: StationsPage }) {
     );
     setSelected(new Set());
     router.refresh();
+  };
+
+  // Delete a station via the backend, then refresh.
+  const confirmDelete = async () => {
+    if (!deleteRow) return;
+    setDeleting(true);
+    const res = await fetch(`${BASE}/api/stations/${deleteRow.id}`, { method: "DELETE" })
+      .then(async (r) => ({
+        ok: r.ok,
+        err: r.ok ? null : ((await r.json().catch(() => ({}))) as { error?: string }).error,
+      }))
+      .catch(() => ({ ok: false, err: null as string | null }));
+    setDeleting(false);
+    if (res.ok) {
+      toast(t("stations.deletedToast", { name: nameOf(deleteRow) }));
+      setSelected((prev) => {
+        const next = new Set(prev);
+        next.delete(deleteRow.id);
+        return next;
+      });
+      setDeleteRow(null);
+      router.refresh();
+    } else {
+      toast(res.err ?? t("stations.deleteFailed"), "info");
+    }
   };
 
   return (
@@ -468,6 +506,13 @@ export function StationsTable({ page }: { page: StationsPage }) {
                                 <Wrench className="size-4" />
                                 {t("stations.setMaintenance")}
                               </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => setDeleteRow(row)}
+                                className="text-text-warning focus:bg-status-warning/10 focus:text-text-warning"
+                              >
+                                <Trash2 className="size-4" />
+                                {t("stations.deleteStation")}
+                              </DropdownMenuItem>
                             </>
                           ) : null}
                         </DropdownMenuContent>
@@ -526,6 +571,34 @@ export function StationsTable({ page }: { page: StationsPage }) {
         row={liveRow}
         onOpenChange={(open) => !open && setLiveRow(null)}
       />
+
+      {/* Delete confirmation — destructive, requires explicit confirm. */}
+      <Dialog open={deleteRow !== null} onOpenChange={(o) => { if (!o && !deleting) setDeleteRow(null); }}>
+        <DialogContent>
+          <DialogHeader className="flex-row items-center gap-3.5 space-y-0">
+            <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-xl bg-status-warning/10 text-text-warning">
+              <Trash2 className="size-5" />
+            </span>
+            <div className="flex min-w-0 flex-col gap-1">
+              <DialogTitle>{t("stations.delete.title")}</DialogTitle>
+              <DialogDescription>
+                {t("stations.delete.desc", { name: deleteRow ? nameOf(deleteRow) : "" })}
+              </DialogDescription>
+            </div>
+          </DialogHeader>
+          <DialogFooter className="mt-6 border-t border-border-subtle pt-4">
+            <DialogClose asChild>
+              <Button type="button" variant="outline" disabled={deleting}>
+                {t("common.cancel")}
+              </Button>
+            </DialogClose>
+            <Button type="button" variant="destructive" onClick={confirmDelete} disabled={deleting}>
+              <Trash2 className="size-4" />
+              {t("stations.delete.confirm")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </TooltipProvider>
   );
 }

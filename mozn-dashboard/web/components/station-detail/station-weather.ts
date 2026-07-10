@@ -15,7 +15,7 @@ export type WeatherCondition = "sunny" | "cloudy" | "rain" | "storms";
 
 export interface ForecastDay {
   /** i18n day key — see dashboard.station.day.* */
-  key: "today" | "sun" | "mon" | "tue" | "wed" | "thu" | "fri";
+  key: "today" | "sun" | "mon" | "tue" | "wed" | "thu" | "fri" | "sat";
   condition: WeatherCondition;
   low: number;
   high: number;
