@@ -13,18 +13,12 @@ export const stations: Record<string, Entry> = {
   "stations.colStation": { en: "Station", ar: "المحطة" },
   "stations.colRegion": { en: "Region", ar: "المنطقة" },
   "stations.colStatus": { en: "Status", ar: "الحالة" },
-  "stations.colSignal": { en: "Signal", ar: "الإشارة" },
-  "stations.colBattery": { en: "Battery", ar: "البطارية" },
   "stations.colLastReading": { en: "Last reading", ar: "آخر قراءة" },
 
   // Selection / row aria
   "stations.selectAll": { en: "Select all", ar: "تحديد الكل" },
   "stations.selectRow": { en: "Select {name}", ar: "تحديد {name}" },
   "stations.rowActions": { en: "Actions for {name}", ar: "إجراءات {name}" },
-
-  // Signal tooltip
-  "stations.signalTooltip": { en: "Signal: {label} ({n}/4)", ar: "الإشارة: {label} ({n}/4)" },
-  "stations.signalAria": { en: "Signal {strength} of 4", ar: "الإشارة {strength} من 4" },
 
   // Row menu
   "stations.editStation": { en: "Edit station", ar: "تعديل المحطة" },
@@ -76,7 +70,6 @@ export const stations: Record<string, Entry> = {
   "stations.saveFailed": { en: "Couldn't save station", ar: "تعذّر حفظ المحطة" },
   "stations.maintenanceToast": { en: "Set to maintenance · logged", ar: "تم التحويل إلى الصيانة · سُجّل" },
   "stations.maintenanceFailed": { en: "Couldn't update station", ar: "تعذّر تحديث المحطة" },
-  "stations.viewLive": { en: "Live view", ar: "العرض المباشر" },
 
   // Form section headers
   "stations.section.identity": { en: "Identity", ar: "الهوية" },
@@ -102,65 +95,10 @@ export const stations: Record<string, Entry> = {
   "stations.sensor.water": { en: "Water level", ar: "منسوب المياه" },
   "stations.sensor.pressure": { en: "Pressure", ar: "الضغط الجوي" },
 
-  // Telemetry
-  "stations.protocol": { en: "Communication protocol", ar: "بروتوكول الاتصال" },
-  "stations.protocol.cellular": { en: "Cellular (4G)", ar: "خلوي (4G)" },
-  "stations.protocol.satellite": { en: "Satellite", ar: "قمر صناعي" },
-  "stations.protocol.lora": { en: "LoRaWAN", ar: "LoRaWAN" },
-  "stations.interval": { en: "Data interval", ar: "فترة إرسال البيانات" },
-  "stations.interval.1": { en: "Every 1 min", ar: "كل دقيقة" },
-  "stations.interval.5": { en: "Every 5 min", ar: "كل 5 دقائق" },
-  "stations.interval.15": { en: "Every 15 min", ar: "كل 15 دقيقة" },
-  "stations.interval.60": { en: "Every 60 min", ar: "كل 60 دقيقة" },
-
   // Public preview
   "stations.previewHint": {
     en: "Exactly what citizens will see on the map after activation.",
     ar: "ما سيراه المواطنون تماماً على الخريطة بعد التفعيل.",
-  },
-
-  // Response steps — per-station override of the alert template's steps
-  "stations.section.steps": { en: "Response steps", ar: "خطوات الاستجابة" },
-  "stations.stepsHint": {
-    en: "Safety guidance citizens see when this station raises a flash-flood alert.",
-    ar: "إرشادات السلامة التي يراها المواطنون عند إطلاق هذه المحطة تنبيه فيضان مفاجئ.",
-  },
-  "stations.stepsInheritedTitle": {
-    en: "Inherited from the “{event}” template",
-    ar: "موروثة من قالب «{event}»",
-  },
-  "stations.stepsInheritedEmpty": {
-    en: "This alert template has no response steps yet.",
-    ar: "لا يحتوي قالب التنبيه هذا على خطوات استجابة بعد.",
-  },
-  "stations.stepsOverrideBtn": { en: "Override for this station", ar: "تخصيص لهذه المحطة" },
-  "stations.stepsOverrideActive": {
-    en: "Custom steps for this station",
-    ar: "خطوات مخصّصة لهذه المحطة",
-  },
-  "stations.stepsRevert": { en: "Revert to template", ar: "العودة إلى القالب" },
-  "stations.stepsOverrideNote": {
-    en: "These steps replace the template’s steps for this station only — other stations keep the template.",
-    ar: "تحلّ هذه الخطوات محل خطوات القالب لهذه المحطة فقط — تبقى المحطات الأخرى على القالب.",
-  },
-  "stations.noSteps": {
-    en: "No steps yet. Add the first action below.",
-    ar: "لا توجد خطوات بعد. أضف أول إجراء أدناه.",
-  },
-  "stations.dragStep": {
-    en: "Reorder step {n} — drag, or use the arrow keys",
-    ar: "أعد ترتيب الخطوة {n} — اسحب، أو استخدم مفاتيح الأسهم",
-  },
-  "stations.addStep": { en: "Add step", ar: "إضافة خطوة" },
-  "stations.removeStep": { en: "Remove step", ar: "حذف الخطوة" },
-
-  // Station Live View (A2.3) — hardware health
-  "stations.live.title": { en: "Live view", ar: "العرض المباشر" },
-  "stations.live.subtitle": { en: "Hardware health & raw telemetry", ar: "صحة العتاد والقياسات الخام" },
-  "stations.live.noTelemetryTitle": { en: "No telemetry yet", ar: "لا توجد قياسات بعد" },
-  "stations.live.noTelemetry": {
-    en: "This station hasn't reported any hardware telemetry yet.",
-    ar: "لم تُرسل هذه المحطة أي قياسات عتاد حتى الآن.",
   },
 
   // Full-page station form (matches Figma "Add Station")
@@ -174,7 +112,6 @@ export const stations: Record<string, Entry> = {
     ar: "ضع المؤشّر ضمن حدود ليبيا.",
   },
   "stations.section.sensors": { en: "Sensors", ar: "الحسّاسات" },
-  "stations.section.comms": { en: "Communication & data", ar: "الاتصال والبيانات" },
   "stations.stationId": { en: "Station ID", ar: "معرّف المحطة" },
   "stations.stationIdAuto": { en: "Auto-generated on save", ar: "يُنشأ تلقائيًا عند الحفظ" },
   "stations.wuStationId": { en: "Weather Underground ID", ar: "معرّف Weather Underground" },

@@ -44,19 +44,32 @@ import {
 import { TablePagination } from "@/components/data-table/table-pagination";
 import { usePagination } from "@/hooks/use-pagination";
 import { useT, useTD } from "@/components/providers/locale-provider";
+import { usePreferences } from "@/features/settings/use-preferences";
 import { InboxAlertRow } from "./inbox-alert-row";
 import { triageSort } from "./inbox-meta";
-import type { AlertInboxPage } from "@/features/alert-inbox/types";
+import type { AlertInboxPage, InboxItem, SlaTone } from "@/features/alert-inbox/types";
 
 type SortKey = "severity" | "alert";
 
 const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+
+/** Recompute an item's SLA countdown from its age + the operator's SLA-minutes
+ * preference (routine urgency has no SLA). Pure — uses the fetch-time age, not a
+ * live clock, matching how the list was rendered server-side. */
+function slaFor(item: InboxItem, slaMinutes: number): { label: string; tone: SlaTone } {
+  if (item.severity === "routine") return { label: "No SLA", tone: "muted" };
+  const remaining = slaMinutes * 60 - item.ageSeconds;
+  const mmss = (s: number) => `${Math.floor(Math.abs(s) / 60)}:${String(Math.abs(s) % 60).padStart(2, "0")}`;
+  if (remaining > 0) return { label: `${mmss(remaining)} to SLA`, tone: remaining < 60 ? "danger" : "ok" };
+  return { label: "SLA passed", tone: "danger" };
+}
 
 export function AlertInboxView({ page }: { page: AlertInboxPage }) {
   const t = useT();
   const td = useTD();
   const router = useRouter();
   const { readOnly } = useRole();
+  const { slaAckMinutes } = usePreferences();
   // Multi-select severity filter (empty = all), shadcn faceted-filter style.
   const [severities, setSeverities] = React.useState<string[]>([]);
   const [query, setQuery] = React.useState("");
@@ -418,7 +431,7 @@ export function AlertInboxView({ page }: { page: AlertInboxPage }) {
               {pageRows.map((item) => (
                 <InboxAlertRow
                   key={item.id}
-                  item={item}
+                  item={{ ...item, sla: slaFor(item, slaAckMinutes) }}
                   acknowledged={acked.has(item.id)}
                   escalated={escalated.has(item.id)}
                   selected={selected.has(item.id)}

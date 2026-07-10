@@ -30,6 +30,7 @@ import { OutcomeBadge, SeverityBadge } from "@/components/common/status-badges";
 import { downloadCsv } from "@/lib/export-csv";
 import { toast } from "@/components/ui/toaster";
 import { useLocale } from "@/components/providers/locale-provider";
+import { usePreferences } from "@/features/settings/use-preferences";
 import { cn } from "@/lib/utils";
 import type { Locale } from "@/lib/i18n";
 import type { AlertHistoryPage, AlertHistoryRow } from "@/features/history/types";
@@ -90,6 +91,19 @@ export function AlertHistoryView({ page, range }: { page: AlertHistoryPage; rang
   const [severities, setSeverities] = React.useState<string[]>([]);
   const [regions, setRegions] = React.useState<string[]>([]);
   const [types, setTypes] = React.useState<string[]>([]);
+
+  // Apply the operator's saved default region as the initial region filter
+  // (once, and only if that region exists in this dataset).
+  const { defaultRegion } = usePreferences();
+  const appliedDefaultRegion = React.useRef(false);
+  React.useEffect(() => {
+    if (appliedDefaultRegion.current) return;
+    if (defaultRegion && defaultRegion !== "all" && page.regions.includes(defaultRegion)) {
+      appliedDefaultRegion.current = true;
+      /* eslint-disable-next-line react-hooks/set-state-in-effect -- one-time default from prefs */
+      setRegions([defaultRegion]);
+    }
+  }, [defaultRegion, page.regions]);
   const [query, setQuery] = React.useState("");
   const [sort, setSort] = React.useState<SortState<SortKey>>({ key: "time", dir: "asc" });
   const onSort = (key: SortKey) => setSort((prev) => nextSort(prev, key));

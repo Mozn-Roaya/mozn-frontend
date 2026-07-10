@@ -19,11 +19,6 @@ export interface SettingsPreferences {
   alertSound: boolean;
   alertVolume: Volume;
   slaAckMinutes: number;
-  autoEscalate: boolean;
-  autoEscalateMinutes: number;
-  // Station monitoring
-  offlineAfterMinutes: number;
-  lowBatteryPct: number;
   // Live data
   refreshInterval: RefreshInterval;
   defaultRegion: string;
@@ -43,11 +38,7 @@ export const DEFAULT_PREFERENCES: SettingsPreferences = {
   notif: {},
   alertSound: false,
   alertVolume: "off",
-  slaAckMinutes: 1,
-  autoEscalate: false,
-  autoEscalateMinutes: 1,
-  offlineAfterMinutes: 5,
-  lowBatteryPct: 1,
+  slaAckMinutes: 2,
   refreshInterval: "off",
   defaultRegion: "",
 };
@@ -75,10 +66,15 @@ export function loadPreferences(defaults: SettingsPreferences): SettingsPreferen
   }
 }
 
+/** Fired after preferences are saved so live consumers (auto-refresh, SLA,
+ * unit displays) can re-read without a full reload. */
+export const PREFS_CHANGED_EVENT = "mozn-settings-changed";
+
 export function savePreferences(prefs: SettingsPreferences): void {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+    window.dispatchEvent(new Event(PREFS_CHANGED_EVENT));
   } catch {
     /* storage unavailable */
   }

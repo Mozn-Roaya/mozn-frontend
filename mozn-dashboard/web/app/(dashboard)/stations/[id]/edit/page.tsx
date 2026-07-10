@@ -33,7 +33,6 @@ export default async function EditStationPage({
         latitude: detail?.latitude,
         longitude: detail?.longitude,
         sensors: detail?.sensors,
-        reportIntervalMinutes: detail?.reportIntervalMinutes,
         operationalStatus: detail?.operationalStatus,
         wuStationId: detail?.wuStationId,
       }}

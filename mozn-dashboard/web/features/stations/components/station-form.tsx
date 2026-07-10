@@ -7,19 +7,12 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
   Check,
-  GripVertical,
   Info,
   MapPin,
-  Plus,
-  Radio,
   Radar,
-  RotateCcw,
-  SquarePen,
-  Trash2,
   TriangleAlert,
 } from "lucide-react";
 
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -33,7 +26,6 @@ import {
 } from "@/components/ui/select";
 import { toast } from "@/components/ui/toaster";
 import { useLocale } from "@/components/providers/locale-provider";
-import { useAdminConfig } from "@/components/providers/admin-config-provider";
 import { useRole } from "@/components/providers/role-provider";
 import { StationSummaryCard } from "@/components/station-detail/station-summary-card";
 import type { StationDetail } from "@/components/station-detail/station-detail";
@@ -44,11 +36,9 @@ import {
   paramsToSensors,
   SENSORS,
   sensorsToParams,
-  STEP_OVERRIDE_EVENT,
   type SensorKey,
   type StationFormValue,
   type StationInitialStatus,
-  type StationInterval,
 } from "./station-form-shared";
 
 // Leaflet touches `window` on import — load the picker client-only.
@@ -81,7 +71,6 @@ export interface StationFormInitial {
   longitude?: number;
   /** Backend sensor param keys (e.g. "temp_high_c"); mapped to FE sensor groups. */
   sensors?: string[];
-  reportIntervalMinutes?: number | null;
   operationalStatus?: "active" | "maintenance" | "deactivated";
   wuStationId?: string | null;
 }
@@ -107,7 +96,6 @@ export function StationForm({
   const router = useRouter();
   const { resolvedTheme } = useTheme();
   const theme = resolvedTheme === "dark" ? "dark" : "light";
-  const { templateSteps } = useAdminConfig();
   const { readOnly } = useRole();
   const [saving, setSaving] = React.useState(false);
 
@@ -119,12 +107,6 @@ export function StationForm({
       : initial?.operationalStatus === "deactivated"
         ? "offline"
         : "active";
-  const initialInterval: StationInterval = (() => {
-    const s = initial?.reportIntervalMinutes != null ? String(initial.reportIntervalMinutes) : "5";
-    return (["1", "5", "15", "60"] as const).includes(s as StationInterval)
-      ? (s as StationInterval)
-      : "5";
-  })();
   const initialSensors = initial?.sensors
     ? paramsToSensors(initial.sensors)
     : SENSORS.reduce(
@@ -142,49 +124,8 @@ export function StationForm({
     lat: initial?.latitude != null ? String(initial.latitude) : "",
     lng: initial?.longitude != null ? String(initial.longitude) : "",
     status: initialStatus,
-    protocol: "lora",
-    interval: initialInterval,
     sensors: initialSensors,
-    overrideSteps: false,
-    steps: [],
   }));
-
-  // Steps the station inherits from the flash-flood alert template (the event
-  // the public preview shows). Overriding seeds the editor from these.
-  const inheritedSteps = templateSteps[STEP_OVERRIDE_EVENT] ?? [];
-
-  const enableStepsOverride = () =>
-    setForm((f) => ({
-      ...f,
-      overrideSteps: true,
-      steps: f.steps.length > 0 ? f.steps : [...inheritedSteps],
-    }));
-  const revertStepsToTemplate = () => setForm((f) => ({ ...f, overrideSteps: false }));
-  const setStep = (i: number, lang: "en" | "ar", value: string) =>
-    setForm((f) => ({
-      ...f,
-      steps: f.steps.map((s, idx) => (idx === i ? { ...s, [lang]: value } : s)),
-    }));
-  const addStep = () => setForm((f) => ({ ...f, steps: [...f.steps, { en: "", ar: "" }] }));
-  const removeStep = (i: number) =>
-    setForm((f) => ({ ...f, steps: f.steps.filter((_, idx) => idx !== i) }));
-  const moveStep = (i: number, dir: -1 | 1) => moveStepTo(i, i + dir);
-  const moveStepTo = (from: number, to: number) =>
-    setForm((f) => {
-      if (to < 0 || to >= f.steps.length || from === to) return f;
-      const next = [...f.steps];
-      const [moved] = next.splice(from, 1);
-      next.splice(to, 0, moved);
-      return { ...f, steps: next };
-    });
-
-  // Drag-to-reorder state for the step list (native HTML5 DnD, drag from handle).
-  const [dragStep, setDragStep] = React.useState<number | null>(null);
-  const [overStep, setOverStep] = React.useState<number | null>(null);
-  const endStepDrag = () => {
-    setDragStep(null);
-    setOverStep(null);
-  };
 
   const set = <K extends keyof StationFormValue>(key: K, value: StationFormValue[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -323,7 +264,6 @@ export function StationForm({
             longitude: lng,
             elevation: 0,
             sensors,
-            report_interval_minutes: parseInt(form.interval, 10),
           }),
         });
         const json = (await res.json().catch(() => ({}))) as { error?: string; data?: { id?: string } };
@@ -354,7 +294,6 @@ export function StationForm({
             latitude: lat,
             longitude: lng,
             sensors,
-            report_interval_minutes: parseInt(form.interval, 10),
             operational_status: operationalStatus,
           }),
         });
@@ -548,38 +487,6 @@ export function StationForm({
             </div>
           </Card>
 
-          {/* Communication & Data */}
-          <Card className="p-6">
-            <SectionHead title={t("stations.section.comms")} />
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              <Field label={t("stations.protocol")} htmlFor="st-protocol">
-                <Select value={form.protocol} onValueChange={(v) => set("protocol", v as StationFormValue["protocol"])}>
-                  <SelectTrigger id="st-protocol" className="w-full">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <Radio className="size-4 shrink-0 text-muted-foreground" />
-                      <SelectValue />
-                    </div>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="cellular">{t("stations.protocol.cellular")}</SelectItem>
-                    <SelectItem value="satellite">{t("stations.protocol.satellite")}</SelectItem>
-                    <SelectItem value="lora">{t("stations.protocol.lora")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field label={t("stations.interval")} htmlFor="st-interval">
-                <Select value={form.interval} onValueChange={(v) => set("interval", v as StationFormValue["interval"])}>
-                  <SelectTrigger id="st-interval" className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {(["1", "5", "15", "60"] as const).map((m) => (
-                      <SelectItem key={m} value={m}>{t("stations.interval." + m)}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-            </div>
-          </Card>
-
           {/* Emergency contacts — per municipality (city), shared by all its
               stations. Saved to the backend on blur; readOnly can only view. */}
           <Card className="p-6">
@@ -625,168 +532,6 @@ export function StationForm({
             )}
           </Card>
 
-          {/* Response steps — inherited from the flash-flood alert template by
-              default; can be overridden for this station only. */}
-          <Card className="p-6">
-            <SectionHead title={t("stations.section.steps")} hint={t("stations.stepsHint")} />
-
-            {!form.overrideSteps ? (
-              <div className="mt-5 space-y-4">
-                <div className="rounded-2xl border border-border-subtle bg-secondary/40 p-4">
-                  <p className="flex items-center gap-2 text-sm font-medium text-foreground">
-                    <Info className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-                    {t("stations.stepsInheritedTitle", {
-                      event: t("templates.event." + STEP_OVERRIDE_EVENT),
-                    })}
-                  </p>
-                  {inheritedSteps.length > 0 ? (
-                    <ol className="mt-3 flex flex-col gap-2.5">
-                      {inheritedSteps.map((step, i) => (
-                        <li key={i} className="flex items-start gap-2.5">
-                          <span className="grid size-5 shrink-0 place-items-center rounded-full bg-brand-subtle text-[10px] font-semibold tabular-nums text-brand-foreground">
-                            {i + 1}
-                          </span>
-                          <span className="text-xs leading-relaxed text-muted-foreground">
-                            {locale === "ar" ? step.ar || step.en : step.en || step.ar}
-                          </span>
-                        </li>
-                      ))}
-                    </ol>
-                  ) : (
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      {t("stations.stepsInheritedEmpty")}
-                    </p>
-                  )}
-                </div>
-                <Button variant="outline" size="sm" className="w-fit" onClick={enableStepsOverride}>
-                  <SquarePen className="size-4" />
-                  {t("stations.stepsOverrideBtn")}
-                </Button>
-              </div>
-            ) : (
-              <div className="mt-5 space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span
-                    data-slot="pill"
-                    className="inline-flex items-center gap-1.5 rounded-md border border-brand-foreground/20 bg-brand-subtle px-2 py-1 text-xs font-semibold text-brand-foreground"
-                  >
-                    <SquarePen className="size-3.5" aria-hidden />
-                    {t("stations.stepsOverrideActive")}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-muted-foreground"
-                    onClick={revertStepsToTemplate}
-                  >
-                    <RotateCcw className="size-4" />
-                    {t("stations.stepsRevert")}
-                  </Button>
-                </div>
-
-                {/* Drag a row by its handle to reorder; the handle is also
-                    keyboard-operable (ArrowUp/ArrowDown) for a11y. */}
-                <ul className="grid gap-2">
-                  {form.steps.length === 0 ? (
-                    <p className="rounded-xl border border-dashed border-border bg-secondary/40 py-6 text-center text-sm text-muted-foreground">
-                      {t("stations.noSteps")}
-                    </p>
-                  ) : (
-                    form.steps.map((step, i) => (
-                      <li
-                        key={i}
-                        data-step-row
-                        onDragOver={(e) => {
-                          if (dragStep === null) return;
-                          e.preventDefault();
-                          e.dataTransfer.dropEffect = "move";
-                          if (overStep !== i) setOverStep(i);
-                        }}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          if (dragStep !== null) moveStepTo(dragStep, i);
-                          endStepDrag();
-                        }}
-                        className={cn(
-                          "flex items-start gap-2 rounded-lg transition-colors",
-                          dragStep === i && "opacity-40",
-                          overStep === i &&
-                            dragStep !== null &&
-                            dragStep !== i &&
-                            "bg-brand-subtle/50 ring-2 ring-inset ring-brand-foreground/40",
-                        )}
-                      >
-                        <button
-                          type="button"
-                          draggable
-                          onDragStart={(e) => {
-                            setDragStep(i);
-                            e.dataTransfer.effectAllowed = "move";
-                            // Default drag image (the small handle) — a custom
-                            // full-row image renders off-screen in RTL.
-                            e.dataTransfer.setData("text/plain", String(i));
-                          }}
-                          onDragEnd={endStepDrag}
-                          onKeyDown={(e) => {
-                            if (e.key === "ArrowUp") {
-                              e.preventDefault();
-                              moveStep(i, -1);
-                            } else if (e.key === "ArrowDown") {
-                              e.preventDefault();
-                              moveStep(i, 1);
-                            }
-                          }}
-                          className="mt-1 grid size-8 shrink-0 cursor-grab touch-none place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
-                          aria-label={t("stations.dragStep", { n: i + 1 })}
-                          title={t("stations.dragStep", { n: i + 1 })}
-                        >
-                          <GripVertical className="size-4" aria-hidden />
-                        </button>
-                        <span className="mt-1 grid size-8 shrink-0 place-items-center rounded-full bg-brand-subtle text-xs font-semibold tabular-nums text-brand-foreground">
-                          {i + 1}
-                        </span>
-                        {/* Both language versions of the one step, kept paired. */}
-                        <div className="grid flex-1 gap-1.5">
-                          <Input
-                            value={step.en}
-                            dir="ltr"
-                            onChange={(e) => setStep(i, "en", e.target.value)}
-                            placeholder={t("templates.stepHint.en")}
-                            aria-label={t("templates.stepEn", { n: i + 1 })}
-                          />
-                          <Input
-                            value={step.ar}
-                            dir="rtl"
-                            onChange={(e) => setStep(i, "ar", e.target.value)}
-                            placeholder={t("templates.stepHint.ar")}
-                            aria-label={t("templates.stepAr", { n: i + 1 })}
-                          />
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="mt-1 size-8 shrink-0 text-muted-foreground hover:text-text-warning"
-                          onClick={() => removeStep(i)}
-                          aria-label={t("stations.removeStep")}
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
-                      </li>
-                    ))
-                  )}
-                </ul>
-
-                <Button variant="outline" size="sm" className="w-fit" onClick={addStep}>
-                  <Plus className="size-4" />
-                  {t("stations.addStep")}
-                </Button>
-                <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
-                  <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-                  {t("stations.stepsOverrideNote")}
-                </p>
-              </div>
-            )}
-          </Card>
         </div>
 
         {/* Right — live Public Preview (sticky) */}

@@ -6,6 +6,7 @@ import { AdminConfigProvider } from "@/components/providers/admin-config-provide
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { RouteGuard } from "@/components/layout/route-guard";
+import { AutoRefresh } from "@/components/providers/auto-refresh";
 import { Toaster } from "@/components/ui/toaster";
 import { getServerLocale } from "@/lib/i18n-server";
 import { backendData, getCurrentUser } from "@/lib/backend";
@@ -76,6 +77,7 @@ export default async function DashboardLayout({
           </main>
         </div>
       </div>
+      <AutoRefresh />
       <Toaster />
       </AdminConfigProvider>
       </RoleProvider>

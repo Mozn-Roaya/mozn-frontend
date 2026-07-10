@@ -70,33 +70,8 @@ export const settings: Record<string, Entry> = {
     en: "How long an alert may stay unacknowledged before it breaches SLA.",
     ar: "المدة التي يبقى فيها التنبيه دون إقرار قبل تجاوز اتفاقية مستوى الخدمة.",
   },
-  "settings.autoEscalate.label": { en: "Auto-escalate unacknowledged", ar: "تصعيد تلقائي للتنبيهات غير المُقرّة" },
-  "settings.autoEscalate.desc": {
-    en: "Escalate to the next tier when no one acknowledges in time.",
-    ar: "التصعيد إلى المستوى التالي عندما لا يُقِر أحد في الوقت المناسب.",
-  },
-  "settings.autoEscalate.after": { en: "Escalate after", ar: "التصعيد بعد" },
-  "settings.autoEscalate.afterDesc": {
-    en: "Delay before an unacknowledged alert escalates.",
-    ar: "المهلة قبل تصعيد التنبيه غير المُقَرّ.",
-  },
 
   /* --------------------------- Station monitoring ------------------------ */
-  "settings.health.title": { en: "Station health", ar: "حالة المحطات" },
-  "settings.health.desc": {
-    en: "Thresholds that flag a station as needing attention.",
-    ar: "الحدود التي تُصنِّف المحطة على أنها بحاجة إلى انتباه.",
-  },
-  "settings.offline.label": { en: "Mark offline after no report for", ar: "اعتبارها غير متصلة بعد انقطاع التقارير لمدة" },
-  "settings.offline.desc": {
-    en: "How long a station may go silent before it's flagged offline.",
-    ar: "المدة التي تتوقف فيها المحطة عن الإرسال قبل اعتبارها غير متصلة.",
-  },
-  "settings.lowBattery.label": { en: "Low-battery warning at", ar: "تحذير انخفاض البطارية عند" },
-  "settings.lowBattery.desc": {
-    en: "Warn when a station's battery drops below this level.",
-    ar: "التحذير عند انخفاض بطارية المحطة دون هذا المستوى.",
-  },
   // Data validation rules (table)
   "settings.validation.groupTitle": { en: "Data validation rules", ar: "قواعد التحقق من البيانات" },
   "settings.validation.groupDesc": {

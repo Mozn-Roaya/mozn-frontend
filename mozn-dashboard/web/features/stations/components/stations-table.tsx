@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import {
-  Activity,
   Download,
   MoreHorizontal,
   PenLine,
@@ -36,12 +35,6 @@ import {
   tableBodyRowClass,
   tableHeaderRowClass,
 } from "@/components/ui/table";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useLocale, useT, useTD } from "@/components/providers/locale-provider";
 import { useRole } from "@/components/providers/role-provider";
@@ -65,7 +58,6 @@ import type {
   StationRow,
   StationsPage,
 } from "@/features/stations/types";
-import { BatteryMeter, SignalBars } from "./station-meters";
 import {
   Dialog,
   DialogClose,
@@ -84,7 +76,6 @@ import {
 import Link from "next/link";
 import { StationSummaryCard } from "@/components/station-detail/station-summary-card";
 import { detailFromStationRow } from "@/components/station-detail/station-detail";
-import { StationLiveView } from "./station-live-view";
 import { useRouter } from "next/navigation";
 
 const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
@@ -96,8 +87,6 @@ function exportStations(stations: StationRow[], t: TFunction) {
       { header: t("stations.colStation"), value: (s) => s.name },
       { header: t("stations.colRegion"), value: (s) => t("region." + s.region) },
       { header: t("stations.colStatus"), value: (s) => t("status." + s.status) },
-      { header: t("stations.colSignal"), value: (s) => t("signal." + s.signal) },
-      { header: t("stations.colBattery"), value: (s) => (s.battery == null ? "—" : `${s.battery}%`) },
       { header: t("stations.colLastReading"), value: (s) => s.lastReading },
     ],
     stations,
@@ -106,7 +95,7 @@ function exportStations(stations: StationRow[], t: TFunction) {
 }
 
 type Row = StationRow;
-type SortKey = "station" | "region" | "status" | "signal" | "battery";
+type SortKey = "station" | "region" | "status";
 type Density = "comfortable" | "compact";
 
 // Lower rank = more urgent; the default sort floats problems to the top.
@@ -153,8 +142,6 @@ export function StationsTable({ page }: { page: StationsPage }) {
   const [density, setDensity] = React.useState<Density>("comfortable");
   // Station whose detail sheet is open (Figma "Station Summary").
   const [detailRow, setDetailRow] = React.useState<Row | null>(null);
-  // Station whose hardware live view is open (A2.3). Edit navigates to a page.
-  const [liveRow, setLiveRow] = React.useState<Row | null>(null);
   // Station pending delete-confirmation.
   const [deleteRow, setDeleteRow] = React.useState<Row | null>(null);
   const [deleting, setDeleting] = React.useState(false);
@@ -206,10 +193,6 @@ export function StationsTable({ page }: { page: StationsPage }) {
           return nameOf(a).localeCompare(nameOf(b)) * dir;
         case "region":
           return (a.region.localeCompare(b.region) || nameOf(a).localeCompare(nameOf(b))) * dir;
-        case "signal":
-          return (a.signal - b.signal) * dir;
-        case "battery":
-          return ((a.battery ?? -1) - (b.battery ?? -1)) * dir;
         case "status":
         default:
           return (
@@ -306,7 +289,7 @@ export function StationsTable({ page }: { page: StationsPage }) {
   };
 
   return (
-    <TooltipProvider>
+    <>
       <Card className="overflow-hidden">
         {/* Toolbar */}
         <div className="flex flex-col gap-3 border-b border-border-subtle p-4 lg:flex-row lg:items-center">
@@ -383,8 +366,6 @@ export function StationsTable({ page }: { page: StationsPage }) {
               <SortableHead label={t("stations.colStation")} column="station" sort={sort} onSort={onSort} className={readOnly ? "ps-6" : undefined} />
               <SortableHead label={t("stations.colRegion")} column="region" sort={sort} onSort={onSort} />
               <SortableHead label={t("stations.colStatus")} column="status" sort={sort} onSort={onSort} />
-              <SortableHead label={t("stations.colSignal")} column="signal" sort={sort} onSort={onSort} />
-              <SortableHead label={t("stations.colBattery")} column="battery" sort={sort} onSort={onSort} />
               <TableHead>{t("stations.colLastReading")}</TableHead>
               <TableHead className="w-12 text-end" />
             </TableRow>
@@ -392,7 +373,7 @@ export function StationsTable({ page }: { page: StationsPage }) {
           <TableBody>
             {rows.length === 0 ? (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={readOnly ? 7 : 8} className="h-[320px] p-0">
+                <TableCell colSpan={readOnly ? 5 : 6} className="h-[320px] p-0">
                   <EmptyState
                     icon={hasFilters ? SearchX : RadioTower}
                     title={t(hasFilters ? "stations.emptyTitle" : "stations.noDataTitle")}
@@ -445,30 +426,6 @@ export function StationsTable({ page }: { page: StationsPage }) {
                     <TableCell>
                       <StationStatusBadge status={row.status} />
                     </TableCell>
-                    <TableCell>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span className="inline-flex items-center gap-2">
-                            <SignalBars
-                              strength={row.signal}
-                              ariaLabel={t("stations.signalAria", { strength: row.signal })}
-                            />
-                            <span className="text-xs text-muted-foreground">
-                              {t("signal." + row.signal)}
-                            </span>
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {t("stations.signalTooltip", {
-                            label: t("signal." + row.signal),
-                            n: row.signal,
-                          })}
-                        </TooltipContent>
-                      </Tooltip>
-                    </TableCell>
-                    <TableCell>
-                      <BatteryMeter percent={row.battery} />
-                    </TableCell>
                     <TableCell className="text-muted-foreground">{td(row.lastReading)}</TableCell>
                     <TableCell className="text-end" onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>
@@ -486,10 +443,6 @@ export function StationsTable({ page }: { page: StationsPage }) {
                           <DropdownMenuItem onClick={() => setDetailRow(row)}>
                             <Search className="size-4" />
                             {t("common.viewDetails")}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => setLiveRow(row)}>
-                            <Activity className="size-4" />
-                            {t("stations.viewLive")}
                           </DropdownMenuItem>
                           {!readOnly ? (
                             <>
@@ -566,12 +519,6 @@ export function StationsTable({ page }: { page: StationsPage }) {
         </SheetContent>
       </Sheet>
 
-      {/* Station Live View (A2.3) — hardware health detail */}
-      <StationLiveView
-        row={liveRow}
-        onOpenChange={(open) => !open && setLiveRow(null)}
-      />
-
       {/* Delete confirmation — destructive, requires explicit confirm. */}
       <Dialog open={deleteRow !== null} onOpenChange={(o) => { if (!o && !deleting) setDeleteRow(null); }}>
         <DialogContent>
@@ -599,6 +546,6 @@ export function StationsTable({ page }: { page: StationsPage }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </TooltipProvider>
+    </>
   );
 }

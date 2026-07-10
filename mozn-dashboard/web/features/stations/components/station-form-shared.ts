@@ -1,5 +1,3 @@
-import type { LocalizedStep } from "@/types/shared";
-
 export type SensorKey =
   | "temperature"
   | "humidity"
@@ -48,8 +46,6 @@ export function paramsToSensors(params: string[]): Record<SensorKey, boolean> {
   );
 }
 
-export type StationProtocol = "cellular" | "satellite" | "lora";
-export type StationInterval = "1" | "5" | "15" | "60";
 export type StationInitialStatus = "active" | "maintenance" | "offline";
 
 export interface StationFormValue {
@@ -67,19 +63,7 @@ export interface StationFormValue {
   lng: string;
   status: StationInitialStatus;
   sensors: Record<SensorKey, boolean>;
-  protocol: StationProtocol;
-  interval: StationInterval;
-  /** When true, `steps` replace the event template's response steps for this
-   * station's flash-flood alert. When false, the station inherits the template. */
-  overrideSteps: boolean;
-  /** Per-station response-step overrides (edited only while `overrideSteps`),
-   * authored in both languages. */
-  steps: LocalizedStep[];
 }
-
-/** Event whose response steps a station can override in the form (the preview's
- * alert is a flash-flood warning). */
-export const STEP_OVERRIDE_EVENT = "flashFlood";
 
 // Libya bounding box (approximate), used only to validate that a new
 // station's pin falls within the country's boundary.

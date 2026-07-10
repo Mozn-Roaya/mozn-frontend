@@ -27,6 +27,9 @@ export interface InboxItem {
   stationId?: string;
   context: string;
   timeAgo: string;
+  /** Alert age in seconds at fetch time — the client recomputes the SLA label
+   * from this + the operator's SLA-minutes preference (no live Date in render). */
+  ageSeconds: number;
   sla: { label: string; tone: SlaTone };
   metrics: InboxMetric[];
   /** Right-hand readout — e.g. "SUSTAINED 32 / 30 min" or "WINDOW Thu 18:00". */

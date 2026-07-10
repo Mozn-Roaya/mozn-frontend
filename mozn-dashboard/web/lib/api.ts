@@ -341,8 +341,6 @@ export async function getStations(): Promise<StationsPage> {
     municipalityId: s.municipality_id,
     status: stationOpStatus(s),
     reading: "", // admin list carries no latest-reading metric (honest-neutral)
-    signal: 0, // WU feed exposes no signal strength — neutral
-    battery: null, // WU exposes only a boolean on readings, not on the station
     lastReading: relativeTime(s.last_seen_at),
   }));
 
@@ -415,6 +413,7 @@ export async function getAlertInbox(): Promise<AlertInboxPage> {
       ...(a.station_id ? { stationId: a.station_id } : {}),
       context: [st?.name, st?.region, a.source].filter(Boolean).join(" · "),
       timeAgo: relativeTime(a.issued_at),
+      ageSeconds: ageSec,
       sla,
       metrics: [
         { label: paramLabel(a.parameter), value: `${a.value}${paramUnit(a.parameter)}`, threshold: "" },
@@ -1022,7 +1021,6 @@ export async function getStation(id: string): Promise<StationDetailData> {
     elevation: s.elevation,
     wuStationId: s.wu_station_id ?? null,
     sensors: s.sensors ?? [],
-    reportIntervalMinutes: s.report_interval_minutes ?? null,
     operationalStatus: s.operational_status,
     isActive: s.is_active,
   };

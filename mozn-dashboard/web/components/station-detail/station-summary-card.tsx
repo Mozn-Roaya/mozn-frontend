@@ -25,6 +25,9 @@ import {
 import { cn } from "@/lib/utils";
 import { useLocale, useT, useTD } from "@/components/providers/locale-provider";
 import { useAdminConfig } from "@/components/providers/admin-config-provider";
+import { usePreferences } from "@/features/settings/use-preferences";
+import { convertWindMetric, tempSymbol, toTemp } from "@/lib/units";
+import type { TempUnit } from "@/features/settings/preferences";
 import { EmptyState } from "@/components/common/empty-state";
 import type { StationDetail } from "./station-detail";
 import type {
@@ -64,13 +67,17 @@ function TemperatureCard({
   feelsLike,
   high,
   low,
+  unit,
 }: {
   temp: number;
   feelsLike: number;
   high: number;
   low: number;
+  unit: TempUnit;
 }) {
   const t = useT();
+  // Gauge position stays in °C (proportion is unit-invariant); only the
+  // displayed numbers + symbol convert to the operator's preferred unit.
   const markerPct = clamp((temp / TEMP_SCALE_MAX) * 100);
   return (
     <Panel className="p-4">
@@ -81,16 +88,16 @@ function TemperatureCard({
       <div className="mt-1 flex items-start justify-between gap-2">
         <div className="flex items-end gap-1">
           <span className="text-[62px] font-bold leading-[64px] tracking-tight tabular-nums text-foreground">
-            {temp}
+            {toTemp(temp, unit)}
           </span>
-          <span className="mb-3 text-xl text-text-secondary">°C</span>
+          <span className="mb-3 text-xl text-text-secondary">{tempSymbol(unit)}</span>
         </div>
         <div className="mt-1 space-y-0.5 text-end">
           <p className="text-[10px] text-text-secondary">
-            {t("dashboard.station.feelsLike", { v: feelsLike })}
+            {t("dashboard.station.feelsLike", { v: toTemp(feelsLike, unit) })}
           </p>
           <p className="text-xs font-medium tabular-nums text-foreground">
-            {t("dashboard.station.highLow", { high, low })}
+            {t("dashboard.station.highLow", { high: toTemp(high, unit), low: toTemp(low, unit) })}
           </p>
         </div>
       </div>
@@ -102,8 +109,8 @@ function TemperatureCard({
           />
         </div>
         <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
-          <span>0°</span>
-          <span>{TEMP_SCALE_MAX}°</span>
+          <span>{toTemp(0, unit)}°</span>
+          <span>{toTemp(TEMP_SCALE_MAX, unit)}°</span>
         </div>
       </div>
     </Panel>
@@ -385,6 +392,7 @@ export function StationSummaryCard({
   const t = useT();
   const td = useTD();
   const { locale } = useLocale();
+  const { tempUnit, windUnit } = usePreferences();
 
   // Fetch the latest reading on open for a live station and merge it in. The
   // card stays a renderer otherwise; the builders (detailFrom*) carry no weather.
@@ -486,6 +494,7 @@ export function StationSummaryCard({
             feelsLike={detail.feelsLike ?? 0}
             high={detail.high ?? 0}
             low={detail.low ?? 0}
+            unit={tempUnit}
           />
 
           {detail.alert ? (
@@ -507,7 +516,7 @@ export function StationSummaryCard({
               <MetricCard
                 icon={Wind}
                 label={t("dashboard.station.wind")}
-                metric={detail.wind}
+                metric={convertWindMetric(detail.wind, windUnit)}
                 direction={detail.wind.direction}
               />
             ) : null}
@@ -520,7 +529,14 @@ export function StationSummaryCard({
           </div>
 
           {detail.forecast && detail.forecast.length > 0 ? (
-            <ForecastCard forecast={detail.forecast} subtitle={t(`region.${detail.region}`)} />
+            <ForecastCard
+              forecast={detail.forecast.map((d) => ({
+                ...d,
+                low: toTemp(d.low, tempUnit),
+                high: toTemp(d.high, tempUnit),
+              }))}
+              subtitle={t(`region.${detail.region}`)}
+            />
           ) : null}
         </>
       )}

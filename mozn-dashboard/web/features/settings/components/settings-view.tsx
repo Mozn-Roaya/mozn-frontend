@@ -411,25 +411,6 @@ export function SettingsView({ page }: { page: SettingsPage }) {
                   max={240}
                 />
               </Row>
-              <Row title={t("settings.autoEscalate.label")} description={t("settings.autoEscalate.desc")}>
-                <Switch
-                  checked={prefs.autoEscalate}
-                  onCheckedChange={(v) => update("autoEscalate", v)}
-                  aria-label={t("settings.autoEscalate.label")}
-                />
-              </Row>
-              <Row title={t("settings.autoEscalate.after")} description={t("settings.autoEscalate.afterDesc")} htmlFor="esc">
-                <NumberField
-                  id="esc"
-                  value={prefs.autoEscalateMinutes}
-                  onChange={(n) => update("autoEscalateMinutes", n)}
-                  unit={minutesUnit(prefs.autoEscalateMinutes)}
-                  min={1}
-                  max={480}
-                  disabled={!prefs.autoEscalate}
-                  ariaLabel={t("settings.autoEscalate.after")}
-                />
-              </Row>
             </Group>
           </div>
         );
@@ -437,29 +418,6 @@ export function SettingsView({ page }: { page: SettingsPage }) {
       case "monitoring":
         return (
           <div className="space-y-8">
-            <Group title={t("settings.health.title")} description={t("settings.health.desc")}>
-              <Row title={t("settings.offline.label")} description={t("settings.offline.desc")} htmlFor="offline">
-                <NumberField
-                  id="offline"
-                  value={prefs.offlineAfterMinutes}
-                  onChange={(n) => update("offlineAfterMinutes", n)}
-                  unit={minutesUnit(prefs.offlineAfterMinutes)}
-                  min={5}
-                  max={720}
-                />
-              </Row>
-              <Row title={t("settings.lowBattery.label")} description={t("settings.lowBattery.desc")} htmlFor="battery">
-                <NumberField
-                  id="battery"
-                  value={prefs.lowBatteryPct}
-                  onChange={(n) => update("lowBatteryPct", n)}
-                  unit="%"
-                  min={1}
-                  max={100}
-                />
-              </Row>
-            </Group>
-
             <div>
               <div className="flex items-start justify-between gap-3 pb-3">
                 <div>

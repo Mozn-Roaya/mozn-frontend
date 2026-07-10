@@ -19,10 +19,6 @@ export interface StationRow {
   status: StationOpStatus;
   /** Latest or status-driving metric, e.g. "Rainfall 28 mm/hr". */
   reading: string;
-  /** Signal strength 0–4. */
-  signal: number;
-  /** Battery charge 0–100, or null when unknown/offline. */
-  battery: number | null;
   lastReading: string;
 }
 
@@ -54,7 +50,6 @@ export interface StationDetailData {
   wuStationId: string | null;
   /** Backend sensor param keys, e.g. "temp_high_c", "rain_rate_mm". */
   sensors: string[];
-  reportIntervalMinutes: number | null;
   operationalStatus: "active" | "maintenance" | "deactivated";
   isActive: boolean;
 }
