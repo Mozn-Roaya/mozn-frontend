@@ -62,7 +62,9 @@ export function MapCanvas({ className }: MapCanvasProps) {
   );
 
   const mapRef = React.useRef<LeafletLibyaMapHandle>(null);
-  const [showLabels, setShowLabels] = React.useState(true);
+  // Default to dots only — station names overlap heavily at the country zoom.
+  // The map control toggles labels on; a selected pin always shows its label.
+  const [showLabels, setShowLabels] = React.useState(false);
   const [zoom, setZoom] = React.useState<number | null>(null);
   const [isLocating, setIsLocating] = React.useState(false);
 

@@ -38,7 +38,9 @@ export function MapCanvas({ stations }: { stations: MapStation[] }) {
 
   const mapRef = React.useRef<LeafletLibyaMapHandle>(null);
   const [selectedId, setSelectedId] = React.useState<string | undefined>();
-  const [showLabels, setShowLabels] = React.useState(true);
+  // Default to dots only — station names overlap at the country zoom; the
+  // toolbar toggles labels on, and a selected pin always shows its label.
+  const [showLabels, setShowLabels] = React.useState(false);
 
   // Localised word per pin kind. The three health statuses double as the
   // legend key; the three severity tiers (yellow/orange/red) colour alerting

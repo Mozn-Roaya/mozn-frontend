@@ -5,7 +5,6 @@ import { LanguageToggle } from "./language-toggle";
 import { Logo } from "./logo";
 import { StationSearch } from "./station-search";
 import { ThemeToggle } from "./theme-toggle";
-import { GaugeIcon } from "../icons";
 import { cn } from "../lib/cn";
 import { getDict, type Lang } from "../lib/i18n";
 
@@ -36,26 +35,8 @@ export function TopBar({ className, lang = "en" }: TopBarProps) {
         </Link>
         <StationSearch className="md:max-w-[240px] lg:max-w-[280px] flex-1 min-w-0" />
         <div className="flex items-center gap-[4px] md:gap-[8px] shrink-0">
-          {/* Cross-zone link to the admin dashboard (Multi-Zones). A plain <a>
-              (not next/link) forces a full navigation: the dashboard is a
-              separate Next app proxied at /dashboard, so client-side soft-nav /
-              prefetch would fail. */}
-          <a
-            href="/dashboard"
-            aria-label={t.dashboardLinkAria}
-            className={cn(
-              "shrink-0 inline-flex items-center gap-[6px] h-[36px] md:h-[40px] lg:h-[44px]",
-              "px-[10px] md:px-[14px] rounded-[8px] md:rounded-[12px]",
-              "bg-(--color-bg-primary) border border-solid border-(--color-border-default)",
-              "text-(--color-text-primary) shadow-card transition-colors",
-              "hover:bg-(--color-bg-secondary) focus:outline-none focus-visible:ring-2 focus-visible:ring-(--color-border-focus)",
-            )}
-          >
-            <GaugeIcon size={20} />
-            <span className="hidden sm:inline text-body-xs font-medium">
-              {t.dashboardLink}
-            </span>
-          </a>
+          {/* The public site is standalone — no cross-link to the admin
+              dashboard (it lives separately; see deployment notes). */}
           <LanguageToggle />
           <ThemeToggle />
         </div>
