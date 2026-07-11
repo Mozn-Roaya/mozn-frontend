@@ -112,6 +112,10 @@ type MetricValues = {
   warning: number;
 };
 
+/** Local edit-state key: region + metric, so the same metric in two regions
+ *  doesn't share one value slot. */
+const vkey = (m: { regionId: string; metric: string }) => `${m.regionId}:${m.metric}`;
+
 /** Parse the editable numbers out of a metric's seeded tier strings. */
 function toValues(m: MetricThresholds): MetricValues {
   const find = (name: Tier) => m.tiers.find((tr) => tr.name.toLowerCase() === name);
@@ -137,20 +141,36 @@ export function MetricThresholdsEditor({
   const [saving, setSaving] = React.useState(false);
 
   const [values, setValues] = React.useState<Record<string, MetricValues>>(() =>
-    Object.fromEntries(metrics.map((m) => [m.metric, toValues(m)])),
+    Object.fromEntries(metrics.map((m) => [vkey(m), toValues(m)])),
   );
+
+  // Distinct regions that actually have thresholds — the top selector's options.
+  // (Adding thresholds to a region with none is still possible via the create
+  // dialog's own region picker; the region then appears here.)
+  const regionsWithData = React.useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const m of metrics) if (!seen.has(m.regionId)) seen.set(m.regionId, m.regionName);
+    return [...seen.entries()].map(([id, name]) => ({ id, name }));
+  }, [metrics]);
+
+  // Which region's thresholds are shown. Default to the first region with data.
+  const [selectedRegion, setSelectedRegion] = React.useState<string>(metrics[0]?.regionId ?? "");
   const [selected, setSelected] = React.useState<ThresholdMetric>(metrics[0]?.metric);
 
-  // Re-seed local tier values (and keep `selected` valid) whenever the server
-  // data changes — e.g. after a create/delete/revert triggers router.refresh().
-  // Without this the editor keeps showing stale/phantom tiers and can read an
-  // undefined metric group (crash) when a newly-created metric appears. Keyed on
-  // a value signature, not the array identity, so an unrelated re-render never
-  // wipes in-progress edits.
+  // Metrics for the selected region only — everything below operates on these.
+  const regionMetrics = React.useMemo(
+    () => metrics.filter((m) => m.regionId === selectedRegion),
+    [metrics, selectedRegion],
+  );
+
+  // Re-seed local tier values (and keep region/metric selection valid) whenever
+  // the server data changes — e.g. after a create/delete/revert triggers
+  // router.refresh(). Keyed on a value signature, not array identity, so an
+  // unrelated re-render never wipes in-progress edits.
   const metricsSig = React.useMemo(
     () =>
       metrics
-        .map((m) => `${m.metric}:${m.tiers.map((tr) => `${tr.name}=${tr.value}`).join(",")}`)
+        .map((m) => `${vkey(m)}:${m.tiers.map((tr) => `${tr.name}=${tr.value}`).join(",")}`)
         .join("|"),
     [metrics],
   );
@@ -158,11 +178,17 @@ export function MetricThresholdsEditor({
     // Intentional prop-sync: re-seed local editor state from the server data
     // after a create/delete/revert triggers router.refresh().
     /* eslint-disable react-hooks/set-state-in-effect */
-    setValues(Object.fromEntries(metrics.map((m) => [m.metric, toValues(m)])));
-    setSelected((cur) => (metrics.some((m) => m.metric === cur) ? cur : metrics[0]?.metric));
+    setValues(Object.fromEntries(metrics.map((m) => [vkey(m), toValues(m)])));
+    setSelectedRegion((cur) => (metrics.some((m) => m.regionId === cur) ? cur : metrics[0]?.regionId ?? ""));
     /* eslint-enable react-hooks/set-state-in-effect */
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [metricsSig]);
+
+  // Keep the selected metric valid for the current region (the region may not
+  // carry the previously-selected metric). Render-time sync — no effect needed.
+  if (regionMetrics.length > 0 && !regionMetrics.some((m) => m.metric === selected)) {
+    setSelected(regionMetrics[0].metric);
+  }
 
   // Create-threshold dialog (region + parameter + severity + value, with a
   // non-blocking impact preview) and per-tier delete confirmation.
@@ -196,7 +222,7 @@ export function MetricThresholdsEditor({
   // (replaces the old hardcoded-empty impact payload). Debounced + abortable.
   const [footerImpact, setFooterImpact] = React.useState<number | null>(null);
   React.useEffect(() => {
-    const m = metrics.find((mm) => mm.metric === selected) ?? metrics[0];
+    const m = regionMetrics.find((mm) => mm.metric === selected) ?? regionMetrics[0];
     const warnTier = m?.tiers.find((tr) => tr.name.toLowerCase() === "warning");
     const regionId = m?.regionId ?? "";
     const param = warnTier?.parameter ?? "";
@@ -226,7 +252,7 @@ export function MetricThresholdsEditor({
       ctrl.abort();
       clearTimeout(timer);
     };
-  }, [metrics, selected, values]);
+  }, [regionMetrics, selected, values]);
 
   // Empty backend payload: nothing to select or edit. Bail out before any of
   // the lookups below, which all assume at least one metric exists.
@@ -242,15 +268,17 @@ export function MetricThresholdsEditor({
     );
   }
 
-  const metric = metrics.find((m) => m.metric === selected) ?? metrics[0];
+  const metric = regionMetrics.find((m) => m.metric === selected) ?? regionMetrics[0];
   if (!metric) return null;
+  // Composite key for this region+metric's local edit state.
+  const curKey = vkey(metric);
   // Fall back to the metric's server values if the local map hasn't caught up
   // yet (the re-seed effect runs right after, but this render must not crash).
-  const v = values[selected] ?? toValues(metric);
+  const v = values[curKey] ?? toValues(metric);
   const unit = td(metric.unit);
 
   const setTier = (tier: Tier, next: number) =>
-    setValues((prev) => ({ ...prev, [selected]: { ...prev[selected], [tier]: next } }));
+    setValues((prev) => ({ ...prev, [curKey]: { ...prev[curKey], [tier]: next } }));
 
   // Monotonic guard: each tier must exceed the one below it (ascending metrics).
   const lowerBound = (tier: Tier) =>
@@ -273,7 +301,7 @@ export function MetricThresholdsEditor({
       toast(t("thresholds.saveInvalid"), "info");
       return;
     }
-    const edited = values[selected];
+    const edited = values[curKey];
     const changed = TIERS.map((tier) => {
       const row = metric.tiers.find((tr) => tr.name.toLowerCase() === tier);
       if (!row?.id) return null;
@@ -311,7 +339,8 @@ export function MetricThresholdsEditor({
   };
 
   const openCreate = () => {
-    setCreateDraft(EMPTY_CREATE);
+    // Pre-select the region currently being viewed (still changeable in the dialog).
+    setCreateDraft({ ...EMPTY_CREATE, regionId: selectedRegion });
     setPreview(null);
     setCreateOpen(true);
   };
@@ -405,6 +434,36 @@ export function MetricThresholdsEditor({
   };
 
   return (
+    <div className="space-y-4">
+      {/* Region selector — thresholds are stored per region, so pick which
+          region's set to view/edit. The metric cards below belong to it. */}
+      {regionsWithData.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium text-muted-foreground">
+            {t("thresholds.region.label")}
+          </span>
+          <Select
+            value={selectedRegion}
+            onValueChange={(rid) => {
+              setSelectedRegion(rid);
+              const first = metrics.find((m) => m.regionId === rid)?.metric;
+              if (first) setSelected(first);
+            }}
+          >
+            <SelectTrigger className="w-[220px]" aria-label={t("thresholds.region.label")}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {regionsWithData.map((r) => (
+                <SelectItem key={r.id} value={r.id}>
+                  {t("region." + r.name)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      ) : null}
+
     <Card className="overflow-hidden">
       <div className="grid lg:grid-cols-[224px_minmax(0,1fr)]">
         {/* Master — metric rail. Each item previews its Warning cut-off. */}
@@ -412,10 +471,10 @@ export function MetricThresholdsEditor({
           aria-label={t("thresholds.editor.metricsAria")}
           className="flex gap-1 overflow-x-auto border-b border-border-subtle p-2 lg:flex-col lg:border-b-0 lg:border-e"
         >
-          {metrics.map((m) => {
+          {regionMetrics.map((m) => {
             const Icon = METRIC_ICON[m.metric];
             const isActive = m.metric === selected;
-            const mv = values[m.metric] ?? toValues(m);
+            const mv = values[vkey(m)] ?? toValues(m);
             return (
               <button
                 key={m.metric}
@@ -458,12 +517,17 @@ export function MetricThresholdsEditor({
         {/* Detail — the selected metric's editor. */}
         <div className="min-w-0 p-6">
           <div className="flex items-center justify-between gap-3">
-            <h3 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-foreground">
+            <h3 className="flex flex-wrap items-center gap-2 text-lg font-semibold tracking-tight text-foreground">
               {React.createElement(METRIC_ICON[metric.metric], {
                 className: "size-5 text-muted-foreground",
                 "aria-hidden": true,
               })}
               {t(`thresholds.metric.${metric.metric}`)}
+              {metric.regionName ? (
+                <Badge variant="outline" className="shrink-0 font-medium">
+                  {t("region." + metric.regionName)}
+                </Badge>
+              ) : null}
             </h3>
             <div className="flex items-center gap-2">
               {metric.perStationOverrides ? (
@@ -832,5 +896,6 @@ export function MetricThresholdsEditor({
         </DialogContent>
       </Dialog>
     </Card>
+    </div>
   );
 }

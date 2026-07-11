@@ -475,56 +475,66 @@ const METRIC_LABEL: Record<ThresholdMetric, string> = {
 
 export async function getThresholds(): Promise<ThresholdsPage> {
   const locale = await getServerLocale();
-  const [thresholds, history, users] = await Promise.all([
+  const [thresholds, history, users, regions] = await Promise.all([
     backendData<BackendThreshold[]>("/api/thresholds?page_size=500"),
     backendData<BackendThresholdHistory[]>("/api/thresholds/history?page_size=50").catch(() => [] as BackendThresholdHistory[]),
     loadUsersAll(),
+    loadRegions(),
   ]);
   const users_ = userNameMap(users);
+  const regionName = new Map(regions.map((r) => [r.id, r.name]));
 
-  // Group thresholds by UI metric.
-  const byMetric = new Map<ThresholdMetric, BackendThreshold[]>();
+  // Group thresholds by REGION then UI metric, so each metric card belongs to a
+  // single region. Thresholds are keyed per region in the backend; collapsing by
+  // metric alone merged distinct regions' values into one card and hid the region.
+  const byRegionMetric = new Map<string, Map<ThresholdMetric, BackendThreshold[]>>();
   for (const t of thresholds) {
     const m = paramToMetric(t.parameter);
     if (!m) continue;
-    byMetric.set(m, [...(byMetric.get(m) ?? []), t]);
+    const perMetric = byRegionMetric.get(t.region_id) ?? new Map<ThresholdMetric, BackendThreshold[]>();
+    perMetric.set(m, [...(perMetric.get(m) ?? []), t]);
+    byRegionMetric.set(t.region_id, perMetric);
   }
 
   const severityRank = (s: string) => (s === "red" ? 3 : s === "orange" ? 2 : 1);
-  const metrics: MetricThresholds[] = [...byMetric.entries()].map(([metric, list]) => {
-    const sorted = [...list].sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
-    const unit = paramUnit(sorted[0]?.parameter ?? "");
-    const tiers: ThresholdTier[] = sorted.map((t) => {
-      const tier = severityToTier(t.severity);
-      return {
-        id: t.id,
-        parameter: t.parameter,
-        severity: t.severity,
-        appliesTo: t.applies_to,
-        isActive: t.is_active,
-        sustainDurationMinutes: t.sustain_duration_minutes ?? null,
-        name: tier.charAt(0).toUpperCase() + tier.slice(1),
-        mode: t.severity === "red" ? "manual" : "auto",
-        description: paramLabel(t.parameter),
-        value: String(t.value),
-        unit: paramUnit(t.parameter),
-        sustained: t.sustain_duration_minutes ? `sustained ${t.sustain_duration_minutes} min` : "",
-      };
-    });
-    const scale: ScaleStop[] = [
-      { label: "Normal", value: "", tone: "normal" },
-      ...sorted.map((t) => ({ label: severityToTier(t.severity), value: String(t.value), tone: severityToTier(t.severity) })),
-    ];
-    return {
-      metric,
-      label: METRIC_LABEL[metric],
-      unit,
-      perStationOverrides: false, // backend thresholds are region-level only
-      regionId: sorted[0]?.region_id ?? "",
-      tiers,
-      scale,
-    };
-  });
+  const metrics: MetricThresholds[] = [];
+  for (const [regionId, byMetric] of byRegionMetric) {
+    for (const [metric, list] of byMetric) {
+      const sorted = [...list].sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
+      const unit = paramUnit(sorted[0]?.parameter ?? "");
+      const tiers: ThresholdTier[] = sorted.map((t) => {
+        const tier = severityToTier(t.severity);
+        return {
+          id: t.id,
+          parameter: t.parameter,
+          severity: t.severity,
+          appliesTo: t.applies_to,
+          isActive: t.is_active,
+          sustainDurationMinutes: t.sustain_duration_minutes ?? null,
+          name: tier.charAt(0).toUpperCase() + tier.slice(1),
+          mode: t.severity === "red" ? "manual" : "auto",
+          description: paramLabel(t.parameter),
+          value: String(t.value),
+          unit: paramUnit(t.parameter),
+          sustained: t.sustain_duration_minutes ? `sustained ${t.sustain_duration_minutes} min` : "",
+        };
+      });
+      const scale: ScaleStop[] = [
+        { label: "Normal", value: "", tone: "normal" },
+        ...sorted.map((t) => ({ label: severityToTier(t.severity), value: String(t.value), tone: severityToTier(t.severity) })),
+      ];
+      metrics.push({
+        metric,
+        label: METRIC_LABEL[metric],
+        unit,
+        perStationOverrides: false, // backend thresholds are region-level only
+        regionId,
+        regionName: regionName.get(regionId) ?? "",
+        tiers,
+        scale,
+      });
+    }
+  }
 
   const changes: ThresholdChange[] = history.map((h) => {
     const tier = severityToTier(h.severity);

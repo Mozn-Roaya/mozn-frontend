@@ -130,6 +130,7 @@ export const thresholds: Record<string, Entry> = {
     ar: "أضف حدًّا للتنبيه لمنطقة ومقياس محددين.",
   },
   "thresholds.create.region": { en: "Region", ar: "المنطقة" },
+  "thresholds.region.label": { en: "Region:", ar: "المنطقة:" },
   "thresholds.create.regionPlaceholder": { en: "Select a region", ar: "اختر منطقة" },
   "thresholds.create.noRegions": {
     en: "No regions available to assign.",

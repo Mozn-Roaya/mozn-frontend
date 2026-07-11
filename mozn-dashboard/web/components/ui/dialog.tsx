@@ -5,6 +5,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { isSelectRecentlyActive } from "@/components/ui/select";
 
 const Dialog = DialogPrimitive.Root;
 const DialogTrigger = DialogPrimitive.Trigger;
@@ -37,6 +38,11 @@ function DialogOverlay({
 function isSelectInteraction(
   e: { target: EventTarget | null; detail?: { originalEvent?: Event } },
 ): boolean {
+  // A Select dropdown is open (or just closed this tick): the "outside"
+  // interaction is the Select dismissing, not the dialog — keep the dialog open.
+  // Reliable across Radix's flushSync-unmount + focus-outside timing, which a
+  // DOM query at event time can't catch.
+  if (isSelectRecentlyActive()) return true;
   const el = e.target instanceof Element ? e.target : null;
   if (
     el?.closest(

@@ -7,16 +7,46 @@ import { Check, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocale } from "@/components/providers/locale-provider";
 
+// Radix Select (v2) has no `modal` prop, and while its dropdown is open it makes
+// the page (including an enclosing Dialog's card) pointer-events:none — so a
+// click on a label/empty space in the dialog leaks to the overlay and Radix
+// reads it as an outside-click, closing the dialog. We can't detect that from
+// the DOM reliably (Radix flushSync-unmounts the popper, and the dialog can even
+// close via a focus-outside that fires AFTER the select is gone). Instead the
+// Select records here when it is open / was just open, and DialogContent checks
+// this to keep the dialog open for that one interaction.
+let openSelectCount = 0;
+let lastSelectActiveAt = 0;
+
+/** True while any Select dropdown is open, or briefly after one closed — the
+ *  window in which a Dialog's "outside" interaction is really the Select
+ *  dismissing. */
+export function isSelectRecentlyActive(): boolean {
+  return openSelectCount > 0 || Date.now() - lastSelectActiveAt < 300;
+}
+
 /** Set `dir` on the Radix root from the active locale so the (portaled) content
  * mirrors for Arabic even if the DirectionProvider context is out of reach. An
  * explicit `dir` prop from the caller still wins. */
 function Select({
   dir,
+  onOpenChange,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Root>) {
   const { locale } = useLocale();
   return (
-    <SelectPrimitive.Root dir={dir ?? (locale === "ar" ? "rtl" : "ltr")} {...props} />
+    <SelectPrimitive.Root
+      dir={dir ?? (locale === "ar" ? "rtl" : "ltr")}
+      onOpenChange={(open) => {
+        if (open) openSelectCount += 1;
+        else {
+          openSelectCount = Math.max(0, openSelectCount - 1);
+          lastSelectActiveAt = Date.now();
+        }
+        onOpenChange?.(open);
+      }}
+      {...props}
+    />
   );
 }
 const SelectGroup = SelectPrimitive.Group;

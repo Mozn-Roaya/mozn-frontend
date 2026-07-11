@@ -41,6 +41,8 @@ export interface MetricThresholds {
   perStationOverrides: boolean;
   /** Region the thresholds belong to — used for the live impact preview. */
   regionId: string;
+  /** Region's English name (translated in the UI via region.* keys). */
+  regionName: string;
   tiers: ThresholdTier[];
   scale: ScaleStop[];
 }
