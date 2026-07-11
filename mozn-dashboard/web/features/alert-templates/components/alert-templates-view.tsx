@@ -149,7 +149,7 @@ export function AlertTemplatesView({
 }: {
   initialTemplates: AlertTemplate[];
 }) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const { contactsForCity } = useAdminConfig();
   const router = useRouter();
   const { can } = useRole();
@@ -327,7 +327,11 @@ export function AlertTemplatesView({
   // row now, so they seed straight from the active template.
   const [draft, setDraft] = React.useState<Record<TemplateVersionKey, string>>(active.versions);
   const [steps, setSteps] = React.useState<LocalizedStep[]>(active.steps);
-  const [previewKey, setPreviewKey] = React.useState<TemplateVersionKey>("enDay");
+  // Default the preview to the Arabic variant when the UI is Arabic (the manual
+  // toggle — focusing a message field — still overrides it via setPreviewKey).
+  const [previewKey, setPreviewKey] = React.useState<TemplateVersionKey>(
+    locale === "ar" ? "arDay" : "enDay",
+  );
 
   // Reset the drafts when the resolved active template changes (a selection, or
   // a delete that falls the editor back to another row). Adjusting state during

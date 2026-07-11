@@ -41,6 +41,8 @@ type LeafletLibyaMapProps = {
   readonly theme: MapTheme;
   /** Localised hazard/status word per pin kind, used for pin labels + aria. */
   readonly pinLabels: Readonly<Record<PinKind, string>>;
+  /** Active locale so pin labels use the Arabic station name in 'ar'. */
+  readonly locale?: string;
   readonly onSelectStation: (id: string) => void;
   readonly onZoomChange?: (zoom: number) => void;
 };
@@ -76,6 +78,7 @@ export const LeafletLibyaMap = React.forwardRef<
     showLabels,
     theme,
     pinLabels,
+    locale,
     onSelectStation,
     onZoomChange,
   },
@@ -201,6 +204,7 @@ export const LeafletLibyaMap = React.forwardRef<
           selected: isSelected,
           showLabel,
           pinLabels: pinLabelsRef.current,
+          locale,
         }),
         iconSize: [0, 0],
         iconAnchor: [0, 0],
@@ -215,7 +219,7 @@ export const LeafletLibyaMap = React.forwardRef<
       marker.on("click", () => onSelectRef.current(station.id));
       marker.addTo(layer);
     });
-  }, [stations, selectedStationId, showLabels]);
+  }, [stations, selectedStationId, showLabels, locale]);
 
   // Camera reacts to selection: fly to the station or back to the overview.
   React.useEffect(() => {

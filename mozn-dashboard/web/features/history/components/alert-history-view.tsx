@@ -391,7 +391,9 @@ export function AlertHistoryView({ page, range }: { page: AlertHistoryPage; rang
                   <TableCell>
                     <SeverityBadge severity={row.severity} />
                   </TableCell>
-                  <TableCell className="font-medium text-foreground">{td(row.alert)}</TableCell>
+                  <TableCell className="font-medium text-foreground">
+                    {`${td(row.param)} — ${locale === "ar" ? row.stationAr ?? row.station : row.station}`}
+                  </TableCell>
                   <TableCell className="text-muted-foreground">{t("region." + row.region)}</TableCell>
                   <TableCell className="tabular-nums text-muted-foreground">
                     {fmtAck(toSeconds(row.ackTime), locale)}

@@ -58,6 +58,7 @@ function code(id: string): string {
 export function detailFromMapStation(s: MapStation): StationDetail {
   return {
     name: s.name,
+    nameAr: s.nameAr,
     code: code(s.id),
     region: s.region,
     city: s.name.split(/\s+/)[0],

@@ -65,6 +65,8 @@ export const dataDict: Record<string, string> = {
   // SLA chips
   "within SLA": "ضمن المهلة",
   "no SLA": "لا مهلة",
+  // Inbox SLA note shown by the severity filter (fixture string from getAlertInbox).
+  "Triage critical items within the 2-minute SLA.": "عالِج الحالات الحرجة خلال مهلة دقيقتين.",
   // Metric labels + values
   "Rainfall": "أمطار",
   "Water level": "منسوب المياه",

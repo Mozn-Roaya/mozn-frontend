@@ -25,7 +25,7 @@ import type { RoleMatrix } from "@/types/roles";
 
 import { backendData, backendFetch, backendMutate, getCurrentUser, type MutationResult } from "@/lib/backend";
 import { getServerLocale } from "@/lib/i18n-server";
-import type { Locale } from "@/lib/i18n";
+import { translate, translateData, type Locale } from "@/lib/i18n";
 import type {
   BackendAlert,
   BackendAuditLog,
@@ -112,13 +112,13 @@ async function loadUsersAll(): Promise<BackendUser[]> {
   }
 }
 
-/** stationId → { name, region } via municipality→region join. */
+/** stationId → { name, nameAr, region } via municipality→region join. */
 function stationLookup(
   stations: BackendStation[],
   muniRegion: Map<string, string>,
-): Map<string, { name: string; region: string }> {
+): Map<string, { name: string; nameAr?: string; region: string }> {
   return new Map(
-    stations.map((s) => [s.id, { name: s.name, region: muniRegion.get(s.municipality_id) ?? "—" }]),
+    stations.map((s) => [s.id, { name: s.name, nameAr: s.name_ar, region: muniRegion.get(s.municipality_id) ?? "—" }]),
   );
 }
 
@@ -152,6 +152,9 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
 
   const muniRegion = municipalityRegionName(municipalities, regions);
   const stationRegion = new Map(stations.map((s) => [s.id, muniRegion.get(s.municipality_id) ?? "—"]));
+  // health rows carry no name_ar; map station id → Arabic name so the map pins +
+  // offline feed can localize (they iterate norm.health, which lacks name_ar).
+  const stationNameAr = new Map(stations.map((s) => [s.id, s.name_ar]));
   const users_ = userNameMap(users);
 
   const maintenanceCount = stations.filter((s) => s.operational_status === "maintenance").length;
@@ -231,6 +234,7 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
     return {
       id: sh.id,
       name: sh.name,
+      nameAr: stationNameAr.get(sh.id) ?? "",
       status: healthStatusToMapStatus(sh.status, sh.is_active, sh.last_seen_at),
       latitude: sh.latitude,
       longitude: sh.longitude,
@@ -244,10 +248,17 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
   // Needs attention: unacked active alerts + offline/anomaly health rows.
   const attention: AttentionItem[] = [];
   for (const a of activeAlerts.filter((x) => !x.acknowledged_at).slice(0, 6)) {
+    const aRegion = a.station_id ? stationRegion.get(a.station_id) ?? "" : "";
+    const aTier = severityToTier(a.severity);
     attention.push({
       id: a.id,
+      // title is an English param label — already present in dataDict so td() localizes it.
       title: paramLabel(a.parameter),
-      meta: `${a.station_id ? stationRegion.get(a.station_id) ?? "" : ""} · ${severityToTier(a.severity)}`.replace(/^ · /, ""),
+      // carry the fragments raw so the component localizes region + tier via dict keys
+      // (a pre-joined "Northwest · warning" string can't be translated by td()).
+      region: aRegion,
+      tier: aTier,
+      meta: `${aRegion} · ${aTier}`.replace(/^ · /, ""),
       elapsed: elapsed(a.issued_at),
       severity: a.severity === "yellow" ? "advisory" : "warning",
     });
@@ -255,7 +266,11 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
   for (const sh of norm.health.filter((s) => healthStatusToMapStatus(s.status, s.is_active, s.last_seen_at) === "offline").slice(0, 4)) {
     attention.push({
       id: `offline-${sh.id}`,
+      // English fallback; the component composes the localized "<name> offline" from the fields below.
       title: `${sh.name} offline`,
+      stationName: sh.name,
+      stationNameAr: stationNameAr.get(sh.id) ?? "",
+      region: stationRegion.get(sh.id) ?? "",
       meta: stationRegion.get(sh.id) ?? "No signal",
       elapsed: elapsed(sh.last_seen_at),
       severity: "offline",
@@ -419,7 +434,7 @@ export async function getAlertInbox(): Promise<AlertInboxPage> {
       severity: a.urgency, // routine | urgent | critical == InboxSeverity
       title: paramLabel(a.parameter),
       ...(a.station_id ? { stationId: a.station_id } : {}),
-      context: [st?.name, st?.region, a.source].filter(Boolean).join(" · "),
+      context: [locale === "ar" ? st?.nameAr || st?.name : st?.name, st?.region, a.source].filter(Boolean).join(" · "),
       timeAgo: relativeTime(a.issued_at, locale),
       issuedAt: a.issued_at,
       ageSeconds: ageSec,
@@ -518,11 +533,20 @@ export async function getThresholds(): Promise<ThresholdsPage> {
       h.previous_value != null && h.previous_value !== h.value
         ? `${h.previous_value} → ${h.value}${unit}`
         : `${h.value}${unit}`;
-    const verb = h.action === "created" ? "added" : h.action === "deleted" ? "removed" : h.action === "reverted" ? "reverted" : "";
+    const verb =
+      h.action === "created"
+        ? translate(locale, "thresholds.history.added")
+        : h.action === "deleted"
+          ? translate(locale, "thresholds.history.removed")
+          : h.action === "reverted"
+            ? translate(locale, "thresholds.history.actionReverted")
+            : "";
     return {
       id: h.id,
       thresholdId: h.threshold_id,
-      change: `${paramLabel(h.parameter)} · ${tier.charAt(0).toUpperCase() + tier.slice(1)} ${verb ? verb + " " : ""}${valueText}`.trim(),
+      // Localize each fragment here (locale in scope): param label via dataDict,
+      // severity word via severity.* — a pre-joined English string can't be translated downstream.
+      change: `${translateData(locale, paramLabel(h.parameter))} · ${translate(locale, "severity." + tier)} ${verb ? verb + " " : ""}${valueText}`.trim(),
       by: (h.changed_by && users_.get(h.changed_by)) || "—",
       when: relativeTime(h.created_at, locale),
       whenAt: h.created_at,
@@ -602,7 +626,12 @@ export async function getAlertHistory(params?: { range?: string }): Promise<Aler
       date,
       time,
       severity: historySeverity(a),
+      // `alert` stays English — it backs the type facet, search, sort and CSV export.
+      // The view composes the localized display from param + station/stationAr.
       alert: `${paramLabel(a.parameter)} — ${st?.name ?? st?.region ?? "—"}`,
+      param: paramLabel(a.parameter),
+      station: st?.name ?? st?.region ?? "—",
+      stationAr: st?.nameAr,
       region: st?.region ?? "—",
       ackTime: a.acknowledged_at ? duration(a.issued_at, a.acknowledged_at) : "—",
       duration: a.resolved_at ? duration(a.issued_at, a.resolved_at) : "—",
@@ -794,6 +823,7 @@ export async function getSettings(): Promise<SettingsPage> {
 // excluded (they aren't "active alert" lifecycle states the screen manages).
 
 export async function getActiveAlerts(): Promise<ManagedAlert[]> {
+  const locale = await getServerLocale();
   const alerts = await backendData<BackendAlert[]>("/api/alerts?page_size=200");
   const [regions, municipalities, stations] = await Promise.all([
     loadRegions(),
@@ -819,8 +849,10 @@ export async function getActiveAlerts(): Promise<ManagedAlert[]> {
         severity: historySeverity(a) as ManagedSeverity,
         status,
         region: st?.region ?? "—",
-        stations: st?.name ? [st.name] : [],
-        trigger: a.message,
+        // Localize the station name + alert message by locale (page is server-rendered
+        // and re-runs on the router.refresh() fired by the locale toggle).
+        stations: st ? [locale === "ar" ? st.nameAr || st.name : st.name] : [],
+        trigger: locale === "ar" ? a.message_ar || a.message : a.message,
         readings: metric ? [{ metric, value: `${a.value}${paramUnit(a.parameter)}` }] : [],
         durationMin: Math.max(0, Math.round((now - new Date(a.issued_at).getTime()) / 60_000)),
       };

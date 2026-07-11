@@ -202,6 +202,11 @@ export const thresholds: Record<string, Entry> = {
   },
   "thresholds.history.revertConfirmCta": { en: "Revert change", ar: "نعم، تراجع" },
   "thresholds.history.reverted": { en: "Change reverted", ar: "تم التراجع عن التغيير" },
+  // Inline verbs used inside a changelog line ("Advisory added 9" / "removed").
+  // Distinct from thresholds.history.reverted above, which is the toast sentence.
+  "thresholds.history.added": { en: "added", ar: "أُضيفت" },
+  "thresholds.history.removed": { en: "removed", ar: "أُزيلت" },
+  "thresholds.history.actionReverted": { en: "reverted", ar: "أُعيدت" },
   "thresholds.history.revertFailed": { en: "Couldn't revert change", ar: "تعذّر التراجع عن التغيير" },
   "thresholds.history.emptyTitle": { en: "No changes yet", ar: "لا توجد تغييرات بعد" },
   "thresholds.history.empty": { en: "No changes recorded yet.", ar: "لا توجد تغييرات مسجّلة بعد." },

@@ -13,7 +13,13 @@ export interface AlertHistoryRow {
   date: string;
   time: string;
   severity: AlertSeverity;
+  /** English "<param> — <station>", kept for search / type-facet / sort / CSV export. */
   alert: string;
+  /** English parameter label — translatable via td(). */
+  param: string;
+  /** Station name (English) + Arabic counterpart, composed in the view by locale. */
+  station: string;
+  stationAr?: string;
   region: string;
   ackTime: string;
   duration: string;

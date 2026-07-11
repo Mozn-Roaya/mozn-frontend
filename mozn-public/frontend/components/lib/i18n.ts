@@ -110,8 +110,19 @@ const EN = {
   rainToday: (mm: string) => `${mm} mm so far today.`,
   rainNone: "None expected today.",
 
-  // Cardinal directions
+  // Cardinal directions (full words — used for the compass aria-label)
   cardinals: {
+    N: "N",
+    NE: "NE",
+    E: "E",
+    SE: "SE",
+    S: "S",
+    SW: "SW",
+    W: "W",
+    NW: "NW",
+  } as Record<CardinalKey, string>,
+  // Compact codes for the tiny compass badge (full Arabic words overflow it).
+  cardinalsShort: {
     N: "N",
     NE: "NE",
     E: "E",
@@ -313,6 +324,17 @@ const AR: Dict = {
     SW: "الجنوب الغربي",
     W: "الغرب",
     NW: "الشمال الغربي",
+  },
+  // Compact Arabic compass codes (ش=شمال، ج=جنوب، ق=شرق، غ=غرب).
+  cardinalsShort: {
+    N: "ش",
+    NE: "ش ق",
+    E: "ق",
+    SE: "ج ق",
+    S: "ج",
+    SW: "ج غ",
+    W: "غ",
+    NW: "ش غ",
   },
 
   // Forecast

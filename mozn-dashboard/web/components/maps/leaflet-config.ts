@@ -166,6 +166,8 @@ type PinRenderOptions = {
    * online → "Online"). Shown beside the name and in the aria-label.
    */
   readonly pinLabels: Readonly<Record<PinKind, string>>;
+  /** Active locale so the pin label/aria show the Arabic station name in 'ar'. */
+  readonly locale?: string;
 };
 
 /** The `name · hazard` pill shown beside a pin — mirrors the public map. */
@@ -189,21 +191,22 @@ function labelHtml(name: string, hazard: string): string {
  */
 export function stationIconHtml(
   station: MapStation,
-  { selected, showLabel, pinLabels }: PinRenderOptions,
+  { selected, showLabel, pinLabels, locale }: PinRenderOptions,
 ): string {
   const kind = pinKindFor(station);
   const color = pinColorFor(kind);
   const hazard = pinLabels[kind];
+  const name = locale === "ar" ? station.nameAr || station.name : station.name;
   const classes = ["mz-pin-link", `mz-pin--${kind}`];
   if (selected) classes.push("is-selected");
 
   return [
-    `<span class="${classes.join(" ")}" aria-label="${escapeHtml(station.name)} — ${escapeHtml(hazard)}">`,
+    `<span class="${classes.join(" ")}" aria-label="${escapeHtml(name)} — ${escapeHtml(hazard)}">`,
     `<span class="mz-pin" aria-hidden="true">`,
     `<span class="mz-pin-halo" style="background-color:${color}"></span>`,
     `<span class="mz-pin-dot" style="background-color:${color}"></span>`,
     `</span>`,
-    showLabel ? labelHtml(station.name, hazard) : "",
+    showLabel ? labelHtml(name, hazard) : "",
     `</span>`,
   ].join("");
 }

@@ -49,7 +49,7 @@ function Compass({ direction = "N", lang = "en" }: CompassProps) {
           ascender/descender bias at small sizes; the inner span restores a
           normal line-box for the glyph itself. */}
       <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[28px] h-[8.4px] flex flex-col justify-center text-center leading-[0] text-[7px] font-semibold text-(--color-status-normal-500)">
-        <span className="leading-normal">{direction}</span>
+        <span className="leading-normal">{t.cardinalsShort[direction]}</span>
       </span>
       {/* Rotation layer fills the compass, so its rotate() pivots around the
           true compass center (50% 50% of 28×28). The dot sits at the top of

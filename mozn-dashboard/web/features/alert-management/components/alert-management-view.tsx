@@ -152,7 +152,7 @@ export function AlertManagementView({ initialAlerts }: { initialAlerts: ManagedA
   // Manual alert creation dialog.
   const [createOpen, setCreateOpen] = React.useState(false);
   const [alertDraft, setAlertDraft] = React.useState<CreateAlertDraft>(EMPTY_ALERT);
-  const [stationOpts, setStationOpts] = React.useState<{ id: string; name: string }[]>([]);
+  const [stationOpts, setStationOpts] = React.useState<{ id: string; name: string; nameAr?: string }[]>([]);
   const [paramOpts, setParamOpts] = React.useState<WeatherParameter[]>([]);
   const [creating, setCreating] = React.useState(false);
 
@@ -166,9 +166,9 @@ export function AlertManagementView({ initialAlerts }: { initialAlerts: ManagedA
         .then((r) => (r.ok ? r.json() : null))
         .then((page) => {
           if (!alive || !page?.groups) return;
-          const rows = (page.groups as { rows: { id: string; name: string }[] }[])
+          const rows = (page.groups as { rows: { id: string; name: string; nameAr?: string }[] }[])
             .flatMap((g) => g.rows)
-            .map((r) => ({ id: r.id, name: r.name }));
+            .map((r) => ({ id: r.id, name: r.name, nameAr: r.nameAr }));
           setStationOpts(rows);
         })
         .catch(() => {});
@@ -627,7 +627,7 @@ export function AlertManagementView({ initialAlerts }: { initialAlerts: ManagedA
                     {stationOpts.length === 0 ? (
                       <div className="px-2 py-1.5 text-sm text-muted-foreground">{t("alertmgmt.create.noStations")}</div>
                     ) : (
-                      stationOpts.map((s) => <SelectItem key={s.id} value={s.id}>{td(s.name)}</SelectItem>)
+                      stationOpts.map((s) => <SelectItem key={s.id} value={s.id}>{locale === "ar" ? s.nameAr || s.name : s.name}</SelectItem>)
                     )}
                   </SelectContent>
                 </Select>

@@ -6,7 +6,7 @@ import { Layers, MapPin, MapPinOff, Minus, Plus } from "lucide-react";
 import * as React from "react";
 
 import { cn } from "@/lib/utils";
-import { useT } from "@/components/providers/locale-provider";
+import { useLocale, useT } from "@/components/providers/locale-provider";
 import { EmptyState } from "@/components/common/empty-state";
 import type { MapStation } from "@/features/dashboard/types";
 import { STATION_STATUS } from "../lib/status";
@@ -33,6 +33,7 @@ const LeafletLibyaMap = dynamic(
 
 export function MapCanvas({ stations }: { stations: MapStation[] }) {
   const t = useT();
+  const { locale } = useLocale();
   const { resolvedTheme } = useTheme();
   const theme: MapTheme = resolvedTheme === "dark" ? "dark" : "light";
 
@@ -78,6 +79,7 @@ export function MapCanvas({ stations }: { stations: MapStation[] }) {
         showLabels={showLabels}
         theme={theme}
         pinLabels={pinLabels}
+        locale={locale}
         onSelectStation={handleSelectStation}
       />
 

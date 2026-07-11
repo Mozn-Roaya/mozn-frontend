@@ -54,6 +54,8 @@ export interface ForecastAlert {
 export interface MapStation {
   id: string;
   name: string;
+  /** Arabic station name; the map pin/summary card use it when locale==='ar'. */
+  nameAr?: string;
   status: StationStatus;
   /** Real WGS84 coordinates, plotted directly on the Leaflet basemap. */
   latitude: number;
@@ -87,6 +89,15 @@ export interface AttentionItem {
   meta: string;
   elapsed: string;
   severity: AttentionSeverity;
+  // Raw fragments so the component localizes them with dict keys (a pre-joined
+  // "Northwest · warning" / "<name> offline" string can't be translated by td()).
+  /** Region name (raw English) for `region.*` lookup — alert + offline rows. */
+  region?: string;
+  /** Severity tier ("advisory"|"watch"|"warning") for `severity.*` — alert rows. */
+  tier?: "advisory" | "watch" | "warning";
+  /** Offline rows: the station name in English + Arabic. */
+  stationName?: string;
+  stationNameAr?: string;
 }
 
 export interface NeedsAttention {

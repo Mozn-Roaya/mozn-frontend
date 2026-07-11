@@ -6,7 +6,7 @@ import { Activity, ArrowRight, ChevronRight, ShieldCheck, Siren, TriangleAlert, 
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/common/empty-state";
-import { useT, useTD } from "@/components/providers/locale-provider";
+import { useLocale, useT, useTD } from "@/components/providers/locale-provider";
 import type { AttentionItem, NeedsAttention as NeedsAttentionData } from "@/features/dashboard/types";
 import { SectionCard } from "./section-card";
 import { ATTENTION_SEVERITY } from "../lib/status";
@@ -18,9 +18,29 @@ const SEVERITY_ICON = {
 } as const;
 
 function AttentionRow({ item }: { item: AttentionItem }) {
+  const t = useT();
   const td = useTD();
+  const { locale } = useLocale();
   const Icon = SEVERITY_ICON[item.severity];
   const severity = ATTENTION_SEVERITY[item.severity];
+
+  // Compose the localized title/meta from raw fragments. Offline rows are
+  // "<station> <Offline>"; alert rows keep the (dataDict-translatable) param
+  // label as title and show "<region> · <severity>" as meta. Region/severity/
+  // status all resolve through existing dict keys.
+  const isOffline = item.severity === "offline";
+  const stationDisplay = locale === "ar" ? item.stationNameAr || item.stationName : item.stationName;
+  const title =
+    isOffline && stationDisplay ? `${stationDisplay} ${t("status.offline")}` : td(item.title);
+  const meta = isOffline
+    ? item.region
+      ? t("region." + item.region)
+      : t("signal.0")
+    : item.tier
+      ? [item.region ? t("region." + item.region) : "", t("severity." + item.tier)]
+          .filter(Boolean)
+          .join(" · ")
+      : td(item.meta);
 
   return (
     <li>
@@ -37,8 +57,8 @@ function AttentionRow({ item }: { item: AttentionItem }) {
           <Icon className="size-5" aria-hidden />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-foreground">{td(item.title)}</p>
-          <p className="truncate text-xs text-muted-foreground">{td(item.meta)}</p>
+          <p className="truncate text-sm font-semibold text-foreground">{title}</p>
+          <p className="truncate text-xs text-muted-foreground">{meta}</p>
         </div>
         {/* Elapsed as a subtle time pill. */}
         <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium tabular-nums text-muted-foreground">
