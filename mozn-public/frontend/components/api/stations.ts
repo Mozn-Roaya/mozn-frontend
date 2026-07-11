@@ -2,10 +2,15 @@ import { apiFetch } from "./client";
 
 import type { Station } from "./types";
 
-export function listStations(municipalityId?: string) {
+export function listStations(municipalityId?: string, opts?: { fresh?: boolean }) {
   return apiFetch<Station[]>("/public/stations", {
     query: municipalityId ? { municipality_id: municipalityId } : undefined,
-    revalidate: 60,
+    // The live map passes fresh:true so an SSE-triggered router.refresh() reflects
+    // a just-confirmed alert immediately — router.refresh() does NOT bust Next's
+    // Data Cache, so a `revalidate` would keep serving the pre-alert stations for
+    // up to its TTL. Other callers keep the 60s cache; the backend's own response
+    // cache still shields the endpoint from load.
+    ...(opts?.fresh ? { cache: "no-store" as const } : { revalidate: 60 }),
   });
 }
 

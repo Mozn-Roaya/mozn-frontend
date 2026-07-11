@@ -16,7 +16,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   let stations: Station[] = [];
   try {
-    stations = await listStations();
+    // Fresh (uncached) so an SSE-triggered router.refresh() picks up a
+    // just-confirmed alert's pin colour immediately, not after the cache TTL.
+    stations = await listStations(undefined, { fresh: true });
   } catch (err) {
     console.error("Failed to load stations:", err);
   }
