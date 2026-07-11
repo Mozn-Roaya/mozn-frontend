@@ -24,7 +24,10 @@ export default async function StationOverviewPage({
 
   let station;
   try {
-    station = await getStation(decodedId);
+    // fresh:true so a just-resolved/confirmed alert is reflected the moment the
+    // page is opened (or on an SSE-triggered router.refresh) rather than lingering
+    // for the Data-Cache TTL after the map pin has already updated.
+    station = await getStation(decodedId, { fresh: true });
   } catch {
     notFound();
   }
@@ -42,7 +45,9 @@ export default async function StationOverviewPage({
     // (cap = 1000) and narrow client-side. Once the backend honors the
     // param, the response will already be narrow and the filter becomes a
     // no-op without code changes.
-    listAlerts({ station_id: decodedId, page_size: 1000 }).catch(() => null),
+    listAlerts({ station_id: decodedId, page_size: 1000 }, { fresh: true }).catch(
+      () => null,
+    ),
   ]);
 
   const stationAlerts = (alertsEnvelope?.data ?? []).filter(

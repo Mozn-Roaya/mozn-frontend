@@ -10,16 +10,23 @@ import type { Alert, ApiEnvelope } from "./types";
  * single station should also filter client-side AND raise `page_size` so the
  * station's alert isn't missed by the global pagination window.
  */
-export function listAlerts(filters: {
-  severity?: "yellow" | "orange" | "red";
-  source?: "observed" | "forecast";
-  region_id?: string;
-  station_id?: string;
-  page?: number;
-  page_size?: number;
-} = {}): Promise<ApiEnvelope<Alert[]>> {
+export function listAlerts(
+  filters: {
+    severity?: "yellow" | "orange" | "red";
+    source?: "observed" | "forecast";
+    region_id?: string;
+    station_id?: string;
+    page?: number;
+    page_size?: number;
+  } = {},
+  opts?: { fresh?: boolean },
+): Promise<ApiEnvelope<Alert[]>> {
   return apiFetchEnvelope<Alert[]>("/public/alerts", {
     query: filters,
-    revalidate: 30,
+    // The station-detail page passes fresh:true so a just-resolved alert drops
+    // off the list instantly (router.refresh() can't invalidate a `revalidate`
+    // Data-Cache entry). Other callers keep the 30s cache; the backend response
+    // cache still shields the endpoint from load.
+    ...(opts?.fresh ? { cache: "no-store" as const } : { revalidate: 30 }),
   });
 }

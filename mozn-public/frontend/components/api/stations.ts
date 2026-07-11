@@ -14,16 +14,21 @@ export function listStations(municipalityId?: string, opts?: { fresh?: boolean }
   });
 }
 
-export async function getStation(id: string): Promise<Station> {
+export async function getStation(id: string, opts?: { fresh?: boolean }): Promise<Station> {
   const detail = await apiFetch<Station>(
     `/public/stations/${encodeURIComponent(id)}`,
-    { revalidate: 60 },
+    // The station-detail page passes fresh:true so a just-resolved alert clears
+    // immediately — the alert-bearing fields (active_alerts/forecast_alerts) are
+    // backfilled from the list endpoint below, and router.refresh() can't bust a
+    // `revalidate` Data-Cache entry, so the warning would otherwise linger for
+    // up to the TTL even after the map pin already went green.
+    opts?.fresh ? { cache: "no-store" as const } : { revalidate: 60 },
   );
   // The detail endpoint omits status / active_alerts / forecast_alerts —
   // backfill from the list endpoint (deduped by Next's request memo when the
-  // app layout already fetched it).
+  // app layout already fetched it with the same options).
   if (detail.status) return detail;
-  const list = await listStations();
+  const list = await listStations(undefined, opts);
   const fromList = list.find((s) => s.id === detail.id);
   if (!fromList) return detail;
   return {
