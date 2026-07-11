@@ -20,6 +20,9 @@ export interface StationRow {
   /** Latest or status-driving metric, e.g. "Rainfall 28 mm/hr". */
   reading: string;
   lastReading: string;
+  /** Raw ISO timestamp of the last reading — rendered client-side (RelativeTime)
+   * so it re-localizes instantly on a language switch. */
+  lastReadingAt: string | null;
 }
 
 export interface StationRegionGroup {

@@ -72,6 +72,7 @@ import { usePagination } from "@/hooks/use-pagination";
 import { DotBadge, RoleBadge } from "@/components/common/status-badges";
 import { EmptyState } from "@/components/common/empty-state";
 import { useRole } from "@/components/providers/role-provider";
+import { RelativeTime } from "@/components/common/relative-time";
 import type {
   RegionOption,
   RoleOption,
@@ -178,6 +179,24 @@ export function UsersTable({
   const canCreateUser = can("users.create");
   const canUpdateUser = can("users.update");
   const canDeleteUser = can("users.delete");
+  // Assigned-regions cell: translate each region name (region.* keys) and rejoin,
+  // so a gov user's raw "Northwest, East" shows the localized names. The raw
+  // `user.regions` string is kept elsewhere for sorting + orphan detection.
+  const displayRegions = (regions: string) => {
+    const s = (regions ?? "").trim();
+    if (!s || s === "—") return s || "—";
+    if (/^all regions$/i.test(s)) return td(s);
+    return s
+      .split(/[,،]/)
+      .map((n) => n.trim())
+      .filter(Boolean)
+      .map((name) => {
+        const key = "region." + name;
+        const tr = t(key);
+        return tr === key ? name : tr;
+      })
+      .join(", ");
+  };
   // Server data is the source of truth; after each write we router.refresh().
   const rows = page.users;
   const [roles, setRoles] = React.useState<string[]>([]);
@@ -609,7 +628,7 @@ export function UsersTable({
                 <TableCell>
                   <RoleBadge role={user.role} />
                 </TableCell>
-                <TableCell className="text-muted-foreground">{td(user.regions)}</TableCell>
+                <TableCell className="text-muted-foreground">{displayRegions(user.regions)}</TableCell>
                 <TableCell
                   className={cn(
                     user.lastActive === "Active now"
@@ -617,7 +636,7 @@ export function UsersTable({
                       : "text-muted-foreground",
                   )}
                 >
-                  {td(user.lastActive)}
+                  <RelativeTime iso={user.lastActiveAt} />
                 </TableCell>
                 <TableCell>
                   {user.active ? (

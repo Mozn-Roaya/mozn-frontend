@@ -5,6 +5,7 @@
  * client components can import the small shared bits (role map, formatters).
  */
 
+import type { Locale } from "@/lib/i18n";
 import type {
   UserRole,
   StationOpStatus,
@@ -21,23 +22,43 @@ import type {
 
 // ── Generic formatters ─────────────────────────────────────────────────────
 
-/** Human relative time, e.g. "2 min ago". Null/absent → "Never". */
-export function relativeTime(iso?: string | null, now: number = Date.now()): string {
-  if (!iso) return "Never";
+// Arabic count-noun agreement: 1 = singular, 2 = dual, 3–10 = plural, 11+ =
+// singular-after-number. Returns the "قبل …" phrase for a past interval.
+function arAgo(n: number, one: string, two: string, few: string, many: string): string {
+  if (n === 1) return `قبل ${one}`;
+  if (n === 2) return `قبل ${two}`;
+  if (n >= 3 && n <= 10) return `قبل ${n} ${few}`;
+  return `قبل ${n} ${many}`;
+}
+
+/** Human relative time, e.g. "2 min ago" / "قبل دقيقتين". Null/absent → "Never".
+ * Pass locale="ar" (from getServerLocale) for the Arabic form. */
+export function relativeTime(
+  iso?: string | null,
+  locale: Locale = "en",
+  now: number = Date.now(),
+): string {
+  const ar = locale === "ar";
+  if (!iso) return ar ? "لم تُسجّل" : "Never";
   const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return "Never";
+  if (Number.isNaN(then)) return ar ? "لم تُسجّل" : "Never";
   const secs = Math.max(0, Math.round((now - then) / 1000));
-  if (secs < 45) return "just now";
+  if (secs < 45) return ar ? "الآن" : "just now";
   const mins = Math.round(secs / 60);
-  if (mins < 60) return `${mins} min ago`;
+  if (mins < 60) return ar ? arAgo(mins, "دقيقة", "دقيقتين", "دقائق", "دقيقة") : `${mins} min ago`;
   const hours = Math.round(mins / 60);
-  if (hours < 24) return `${hours} h ago`;
+  if (hours < 24) return ar ? arAgo(hours, "ساعة", "ساعتين", "ساعات", "ساعة") : `${hours} h ago`;
   const days = Math.round(hours / 24);
-  if (days === 1) return "Yesterday";
-  if (days < 30) return `${days} days ago`;
+  if (days === 1) return ar ? "أمس" : "Yesterday";
+  if (days < 30) return ar ? arAgo(days, "يوم", "يومين", "أيام", "يوم") : `${days} days ago`;
   const months = Math.round(days / 30);
-  if (months < 12) return `${months} month${months > 1 ? "s" : ""} ago`;
-  return `${Math.round(months / 12)} year${months >= 24 ? "s" : ""} ago`;
+  if (months < 12) {
+    return ar
+      ? arAgo(months, "شهر", "شهرين", "أشهر", "شهر")
+      : `${months} month${months > 1 ? "s" : ""} ago`;
+  }
+  const years = Math.round(months / 12);
+  return ar ? arAgo(years, "سنة", "سنتين", "سنوات", "سنة") : `${years} year${years > 1 ? "s" : ""} ago`;
 }
 
 /** Short elapsed label, e.g. "3m", "2h", "1d" — for SLA/attention meta. */
@@ -224,6 +245,10 @@ export function paramToMetric(param: string): ThresholdMetric | undefined {
   return PARAM_TO_METRIC[param];
 }
 
+// English display label for every backend parameter key (alertable + validation).
+// The Arabic side lives in lib/i18n/data.ts (dataDict), applied via td() at render
+// so it flips with the locale. Keep the two in lockstep — every label here must
+// have a dataDict entry.
 const PARAM_LABEL: Record<string, string> = {
   rain_rate_mm: "Rainfall rate",
   rain_daily_mm: "Daily rainfall",
@@ -231,8 +256,12 @@ const PARAM_LABEL: Record<string, string> = {
   wind_gust_kmh: "Wind gust",
   temp_high_c: "High temperature",
   temp_low_c: "Low temperature",
+  temp_c: "Temperature",
   pressure_hpa: "Air pressure",
   humidity: "Humidity",
+  uv_index: "UV index",
+  dewpoint_c: "Dew point",
+  solar_radiation: "Solar radiation",
 };
 
 export function paramLabel(param: string): string {
@@ -246,8 +275,11 @@ const PARAM_UNIT: Record<string, string> = {
   wind_gust_kmh: "km/h",
   temp_high_c: "°C",
   temp_low_c: "°C",
+  temp_c: "°C",
   pressure_hpa: "hPa",
   humidity: "%",
+  dewpoint_c: "°C",
+  solar_radiation: "W/m²",
 };
 
 export function paramUnit(param: string): string {

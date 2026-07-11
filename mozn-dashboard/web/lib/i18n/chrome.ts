@@ -67,6 +67,8 @@ export const chrome: Record<string, Entry> = {
   "notif.caughtUp": { en: "You're all caught up.", ar: "لا توجد تنبيهات جديدة." },
   "notif.viewAll": { en: "View all in Alert Inbox", ar: "عرض الكل في صندوق التنبيهات" },
   "notif.unread": { en: "Unread", ar: "غير مقروءة" },
+  // Real-time alert toast (SSE)
+  "events.newAlert": { en: "New alert: {param}", ar: "تنبيه جديد: {param}" },
 
   // Server-rendered page headings (app/(dashboard)/*/page.tsx)
   "page.stations.title": { en: "Stations", ar: "المحطات" },

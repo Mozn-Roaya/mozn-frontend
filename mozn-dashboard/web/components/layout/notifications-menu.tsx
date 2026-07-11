@@ -6,7 +6,6 @@ import {
   Bell,
   BellOff,
   CheckCheck,
-  CheckCircle2,
   Info,
   type LucideIcon,
   TriangleAlert,
@@ -21,39 +20,29 @@ import {
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { EmptyState } from "@/components/common/empty-state";
-import { useT, useTD } from "@/components/providers/locale-provider";
+import { RelativeTime } from "@/components/common/relative-time";
+import { useLocale, useT, useTD } from "@/components/providers/locale-provider";
+import { paramLabel } from "@/lib/mappers";
+import {
+  markAllNotifsRead,
+  markNotifRead,
+  useAlertNotifs,
+} from "@/components/layout/notifications-store";
 
-type NotifTone = "critical" | "warning" | "info" | "success";
-
-interface Notif {
-  id: string;
-  titleKey: string;
-  descKey: string;
-  /** Raw relative-time string; localized via `td()` against lib/i18n/data.ts. */
-  time: string;
-  tone: NotifTone;
-  read: boolean;
-  href: string;
-}
-
-const TONE: Record<NotifTone, { icon: LucideIcon; className: string }> = {
-  critical: { icon: TriangleAlert, className: "text-status-warning" },
-  warning: { icon: TriangleAlert, className: "text-status-advisory" },
-  info: { icon: Info, className: "text-text-link" },
-  success: { icon: CheckCircle2, className: "text-status-normal" },
+// Alert severity → visual tone for the row icon.
+const TONE: Record<string, { icon: LucideIcon; className: string }> = {
+  red: { icon: TriangleAlert, className: "text-status-warning" },
+  orange: { icon: TriangleAlert, className: "text-status-advisory" },
+  yellow: { icon: Info, className: "text-text-link" },
 };
 
 export function NotificationsMenu() {
   const t = useT();
   const td = useTD();
+  const { locale } = useLocale();
   const [open, setOpen] = React.useState(false);
-  const [items, setItems] = React.useState<Notif[]>([]);
+  const items = useAlertNotifs();
   const unread = items.filter((n) => !n.read).length;
-
-  const markAllRead = () =>
-    setItems((prev) => prev.map((n) => ({ ...n, read: true })));
-  const markRead = (id: string) =>
-    setItems((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -85,7 +74,7 @@ export function NotificationsMenu() {
           </div>
           <button
             type="button"
-            onClick={markAllRead}
+            onClick={markAllNotifsRead}
             disabled={unread === 0}
             className="inline-flex items-center gap-1 text-xs font-medium text-text-link transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
           >
@@ -100,13 +89,16 @@ export function NotificationsMenu() {
           ) : (
             <ul className="divide-y divide-border-subtle">
               {items.map((n) => {
-                const Icon = TONE[n.tone].icon;
+                const tone = TONE[n.severity] ?? TONE.yellow;
+                const Icon = tone.icon;
+                const title = `${t("severity." + n.severity)} · ${td(paramLabel(n.parameter))}`;
+                const desc = locale === "ar" && n.messageAr ? n.messageAr : n.message;
                 return (
-                  <li key={n.id}>
+                  <li key={`${n.type}:${n.id}`}>
                     <Link
-                      href={n.href}
+                      href="/alert-inbox"
                       onClick={() => {
-                        markRead(n.id);
+                        markNotifRead(n.id);
                         setOpen(false);
                       }}
                       className={cn(
@@ -114,10 +106,7 @@ export function NotificationsMenu() {
                         !n.read && "bg-accent/40",
                       )}
                     >
-                      <Icon
-                        className={cn("mt-0.5 size-4 shrink-0", TONE[n.tone].className)}
-                        aria-hidden
-                      />
+                      <Icon className={cn("mt-0.5 size-4 shrink-0", tone.className)} aria-hidden />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <p
@@ -126,7 +115,7 @@ export function NotificationsMenu() {
                               n.read ? "font-medium" : "font-semibold",
                             )}
                           >
-                            {t(n.titleKey)}
+                            {title}
                           </p>
                           {!n.read ? (
                             <span
@@ -135,10 +124,10 @@ export function NotificationsMenu() {
                             />
                           ) : null}
                         </div>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {t(n.descKey)}
+                        <p className="truncate text-xs text-muted-foreground" dir="auto">{desc}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          <RelativeTime iso={n.issuedAt} />
                         </p>
-                        <p className="mt-0.5 text-xs text-muted-foreground">{td(n.time)}</p>
                       </div>
                     </Link>
                   </li>

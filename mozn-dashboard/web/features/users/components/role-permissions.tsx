@@ -46,6 +46,13 @@ export function RolePermissions({ matrix }: { matrix: RoleMatrix }) {
   const router = useRouter();
   const { can } = useRole();
   const canManageRoles = can("roles.manage");
+  // Translate by key, falling back to the backend-humanized label when a role,
+  // group, or action has no i18n entry yet (so a newly-added permission still
+  // reads sensibly instead of showing the raw key).
+  const tOr = (key: string, fallback: string) => {
+    const v = t(key);
+    return v === key ? fallback : v;
+  };
 
   const [grants, setGrants] = React.useState<Record<string, Set<string>>>(() => seed(matrix));
   const [saving, setSaving] = React.useState(false);
@@ -139,7 +146,7 @@ export function RolePermissions({ matrix }: { matrix: RoleMatrix }) {
                 <TableHead className="ps-6">{t("roles.col.permission")}</TableHead>
                 {matrix.roles.map((r) => (
                   <TableHead key={r.id} className="whitespace-nowrap text-center">
-                    {r.label}
+                    {tOr("roleName." + r.name, r.label)}
                   </TableHead>
                 ))}
               </TableRow>
@@ -152,14 +159,14 @@ export function RolePermissions({ matrix }: { matrix: RoleMatrix }) {
                       colSpan={matrix.roles.length + 1}
                       className="bg-secondary/40 py-1.5 ps-6 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
                     >
-                      {perms[0]?.groupLabel ?? group}
+                      {tOr("permGroup." + group, perms[0]?.groupLabel ?? group)}
                     </TableCell>
                   </TableRow>
                   {perms.map((p) => (
                     <TableRow key={p.id} className={tableBodyRowClass}>
                       <TableCell className="ps-6">
                         <span className="font-medium text-foreground" title={p.name}>
-                          {p.label}
+                          {tOr("permAction." + p.action, p.label)}
                         </span>
                       </TableCell>
                       {matrix.roles.map((r) => {

@@ -7,6 +7,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { RouteGuard } from "@/components/layout/route-guard";
 import { AutoRefresh } from "@/components/providers/auto-refresh";
+import { EventsProvider } from "@/components/providers/events-provider";
 import { Toaster } from "@/components/ui/toaster";
 import { getServerLocale } from "@/lib/i18n-server";
 import { backendData, getCurrentUser } from "@/lib/backend";
@@ -78,6 +79,7 @@ export default async function DashboardLayout({
         </div>
       </div>
       <AutoRefresh />
+      <EventsProvider />
       <Toaster />
       </AdminConfigProvider>
       </RoleProvider>

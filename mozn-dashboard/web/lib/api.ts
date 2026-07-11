@@ -24,6 +24,8 @@ import type { ActivityCategory, ThresholdMetric, WeatherParameter } from "@/type
 import type { RoleMatrix } from "@/types/roles";
 
 import { backendData, backendFetch, backendMutate, getCurrentUser, type MutationResult } from "@/lib/backend";
+import { getServerLocale } from "@/lib/i18n-server";
+import type { Locale } from "@/lib/i18n";
 import type {
   BackendAlert,
   BackendAuditLog,
@@ -127,6 +129,7 @@ function userNameMap(users: BackendUser[]): Map<string, string> {
 // ── Dashboard overview (A1) ─────────────────────────────────────────────────
 
 export async function getDashboardOverview(): Promise<DashboardOverview> {
+  const locale = await getServerLocale();
   // Permission-based source selection: full admin stats for accounts holding
   // dashboard.view; the leaner region-scoped /api/gov/dashboard otherwise (so a
   // gov account that lacks dashboard.view isn't 403'd on the overview).
@@ -233,7 +236,7 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
       longitude: sh.longitude,
       region: stationRegion.get(sh.id) ?? "—",
       reading: "", // admin health rows carry no reading value (honest-neutral)
-      updated: relativeTime(sh.last_seen_at),
+      updated: relativeTime(sh.last_seen_at, locale),
       ...(counts ? { activeAlerts: counts } : {}),
     };
   });
@@ -269,7 +272,7 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
         id: l.id,
         actor,
         initials: initials(actor),
-        action: describeAudit(l.action, l.resource_type),
+        action: describeAudit(l.action, l.resource_type, locale),
         category: auditCategory(l.resource_type, l.action),
         source: l.ip_address || "—",
         date,
@@ -330,6 +333,7 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
 // ── Stations (A2) ───────────────────────────────────────────────────────────
 
 export async function getStations(): Promise<StationsPage> {
+  const locale = await getServerLocale();
   const { data: stations, meta } = await backendFetch<BackendStation[]>("/api/stations?page_size=1000");
   const [regions, municipalities] = await Promise.all([loadRegions(), loadMunicipalities()]);
   const muniRegion = municipalityRegionName(municipalities, regions);
@@ -342,7 +346,8 @@ export async function getStations(): Promise<StationsPage> {
     municipalityId: s.municipality_id,
     status: stationOpStatus(s),
     reading: "", // admin list carries no latest-reading metric (honest-neutral)
-    lastReading: relativeTime(s.last_seen_at),
+    lastReading: relativeTime(s.last_seen_at, locale),
+    lastReadingAt: s.last_seen_at ?? null,
   }));
 
   // Group by region, preserving region order from the regions list.
@@ -387,6 +392,7 @@ export async function getStations(): Promise<StationsPage> {
 const SLA_SECONDS = 120; // 2-minute triage SLA (design)
 
 export async function getAlertInbox(): Promise<AlertInboxPage> {
+  const locale = await getServerLocale();
   const alerts = await backendData<BackendAlert[]>("/api/alerts?status=pending&is_active=true&page_size=200");
   const [regions, municipalities, stations] = await Promise.all([
     loadRegions(),
@@ -414,7 +420,8 @@ export async function getAlertInbox(): Promise<AlertInboxPage> {
       title: paramLabel(a.parameter),
       ...(a.station_id ? { stationId: a.station_id } : {}),
       context: [st?.name, st?.region, a.source].filter(Boolean).join(" · "),
-      timeAgo: relativeTime(a.issued_at),
+      timeAgo: relativeTime(a.issued_at, locale),
+      issuedAt: a.issued_at,
       ageSeconds: ageSec,
       sla,
       metrics: [
@@ -422,7 +429,7 @@ export async function getAlertInbox(): Promise<AlertInboxPage> {
       ],
       meter: a.starts_at
         ? { label: "WINDOW", value: new Date(a.starts_at).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" }) }
-        : { label: "ISSUED", value: relativeTime(a.issued_at) },
+        : { label: "ISSUED", value: relativeTime(a.issued_at, locale) },
       recommended: "", // backend supplies no recommended-action text (honest-neutral)
       acknowledged: a.acknowledged_at != null,
     };
@@ -452,6 +459,7 @@ const METRIC_LABEL: Record<ThresholdMetric, string> = {
 };
 
 export async function getThresholds(): Promise<ThresholdsPage> {
+  const locale = await getServerLocale();
   const [thresholds, history, users] = await Promise.all([
     backendData<BackendThreshold[]>("/api/thresholds?page_size=500"),
     backendData<BackendThresholdHistory[]>("/api/thresholds/history?page_size=50").catch(() => [] as BackendThresholdHistory[]),
@@ -516,7 +524,8 @@ export async function getThresholds(): Promise<ThresholdsPage> {
       thresholdId: h.threshold_id,
       change: `${paramLabel(h.parameter)} · ${tier.charAt(0).toUpperCase() + tier.slice(1)} ${verb ? verb + " " : ""}${valueText}`.trim(),
       by: (h.changed_by && users_.get(h.changed_by)) || "—",
-      when: relativeTime(h.created_at),
+      when: relativeTime(h.created_at, locale),
+      whenAt: h.created_at,
     };
   });
 
@@ -526,6 +535,7 @@ export async function getThresholds(): Promise<ThresholdsPage> {
 // ── Users (A4) ────────────────────────────────────────────────────────────────
 
 export async function getUsers(): Promise<UsersPage> {
+  const locale = await getServerLocale();
   const users = await backendData<BackendUser[]>("/api/users?page_size=500");
 
   const rows: UserRow[] = users.map((u) => {
@@ -541,7 +551,8 @@ export async function getUsers(): Promise<UsersPage> {
       roleName,
       regions: role === "Super Admin" ? "All regions" : regionNames.join(", ") || "—",
       regionIds: (u.regions ?? []).map((r) => r.id),
-      lastActive: relativeTime(u.last_active_at),
+      lastActive: relativeTime(u.last_active_at, locale),
+      lastActiveAt: u.last_active_at ?? null,
       active: u.is_active,
       ...(u.phone ? { phone: u.phone } : {}),
       ...(u.organization ? { organization: u.organization } : {}),
@@ -611,31 +622,48 @@ export async function getAlertHistory(params?: { range?: string }): Promise<Aler
 
 // ── Activity log (A5.1) ───────────────────────────────────────────────────────
 
-function describeAudit(action: string, resource: string): string {
-  if (action === "login") return "Signed in";
+const AUDIT_VERB_EN: Record<string, string> = {
+  create: "Created", update: "Updated", delete: "Deleted", confirm: "Confirmed",
+  reject: "Rejected", dismiss: "Dismissed", acknowledge: "Acknowledged",
+  unacknowledge: "Unacknowledged", escalate: "Escalated", modify: "Modified",
+  revert: "Reverted", reopen: "Reopened", resolve: "Resolved", preview: "Previewed",
+  history: "Viewed history of", stats: "Viewed", permissions: "Updated permissions of",
+  register: "Registered", regenerate: "Regenerated", upsert: "Saved",
+};
+const AUDIT_VERB_AR: Record<string, string> = {
+  create: "إنشاء", update: "تعديل", delete: "حذف", confirm: "تأكيد", reject: "رفض",
+  dismiss: "تجاهل", acknowledge: "إقرار", unacknowledge: "إلغاء إقرار", escalate: "تصعيد",
+  modify: "تعديل", revert: "إرجاع", reopen: "إعادة فتح", resolve: "إنهاء", preview: "معاينة",
+  history: "عرض سجل", stats: "عرض", permissions: "تعديل صلاحيات", register: "تسجيل",
+  regenerate: "إعادة توليد", upsert: "حفظ",
+};
+const AUDIT_RESOURCE_AR: Record<string, string> = {
+  threshold: "حد", alert: "تنبيه", user: "مستخدم", station: "محطة", role: "دور",
+  dashboard: "لوحة المعلومات", "validation rule": "قاعدة تحقق", "compound rule": "قاعدة مركّبة",
+  template: "قالب", setting: "إعداد", municipality: "بلدية", region: "منطقة", auth: "الدخول",
+  forecast: "تنبؤ", reading: "قراءة", permission: "صلاحية",
+};
+
+function describeAudit(action: string, resource: string, locale: Locale = "en"): string {
   const res = resource.replace(/-/g, " ");
-  const verb: Record<string, string> = {
-    create: "Created",
-    update: "Updated",
-    delete: "Deleted",
-    confirm: "Confirmed",
-    reject: "Rejected",
-    dismiss: "Dismissed",
-    acknowledge: "Acknowledged",
-    escalate: "Escalated",
-    modify: "Modified",
-    revert: "Reverted",
-  };
-  const v = verb[action] ?? action.charAt(0).toUpperCase() + action.slice(1);
+  if (action === "login") return locale === "ar" ? "تسجيل الدخول" : "Signed in";
+  if (locale === "ar") {
+    const v = AUDIT_VERB_AR[action] ?? action;
+    const r = AUDIT_RESOURCE_AR[res] ?? res;
+    return `${v} ${r}`.trim();
+  }
+  const v = AUDIT_VERB_EN[action] ?? action.charAt(0).toUpperCase() + action.slice(1);
   return `${v} ${res}`.trim();
 }
 
 function auditCategory(resource: string, action: string): ActivityCategory {
   if (action === "login" || resource === "auth") return "auth";
-  if (resource.startsWith("threshold")) return "threshold";
+  if (resource.startsWith("threshold") || resource.includes("compound") || resource.includes("validation"))
+    return "threshold";
   if (resource.startsWith("alert")) return "alert";
-  if (resource.startsWith("user")) return "user";
-  if (resource.startsWith("station")) return "station";
+  if (resource.startsWith("user") || resource.startsWith("role")) return "user";
+  // station, municipality, region, and anything else (dashboard/settings) fall
+  // under the station/monitoring bucket — the facet has no dedicated category.
   return "station";
 }
 
@@ -649,6 +677,7 @@ function dayLabel(iso: string, now: number = Date.now()): string {
 }
 
 export async function getActivityLog(): Promise<ActivityLogPage> {
+  const locale = await getServerLocale();
   const logs = await backendData<BackendAuditLog[]>("/api/audit-logs?page_size=200");
   const users = await loadUsersAll();
   const users_ = userNameMap(users);
@@ -664,7 +693,7 @@ export async function getActivityLog(): Promise<ActivityLogPage> {
       time,
       actor,
       initials: initials(actor),
-      action: describeAudit(l.action, l.resource_type),
+      action: describeAudit(l.action, l.resource_type, locale),
       category: auditCategory(l.resource_type, l.action),
       source: l.ip_address || "—",
     };
@@ -1269,13 +1298,14 @@ function compass(deg: number): string {
  * fields that are present. Returns null when the station has no readings.
  */
 export async function getLatestReading(stationId: string): Promise<Partial<StationDetail> | null> {
+  const locale = await getServerLocale();
   const rows = await backendData<BackendReading[]>(
     `/api/readings?station_id=${encodeURIComponent(stationId)}&page_size=1`,
   );
   const r = rows[0];
   if (!r) return null;
 
-  const out: Partial<StationDetail> = { updated: relativeTime(r.time) };
+  const out: Partial<StationDetail> = { updated: relativeTime(r.time, locale) };
   if (r.temp_c != null) out.temp = Math.round(r.temp_c);
   const feels = r.heatindex_c ?? r.windchill_c ?? r.temp_c;
   if (feels != null) out.feelsLike = Math.round(feels);

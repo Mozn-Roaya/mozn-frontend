@@ -53,6 +53,8 @@ export interface ThresholdChange {
   change: string;
   by: string;
   when: string;
+  /** Raw ISO of the change — rendered client-side so it re-localizes instantly. */
+  whenAt: string;
 }
 
 /** Comparator for a compound-rule condition (backend: gt/gte/lt/lte/eq). */

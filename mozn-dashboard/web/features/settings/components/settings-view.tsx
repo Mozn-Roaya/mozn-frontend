@@ -55,6 +55,7 @@ import { cn } from "@/lib/utils";
 import type { Locale } from "@/lib/i18n";
 import { useMounted } from "@/hooks/use-mounted";
 import { useLocale } from "@/components/providers/locale-provider";
+import { paramUnit } from "@/lib/mappers";
 import { useRole } from "@/components/providers/role-provider";
 import type { SettingsPage, ValidationRule } from "@/features/settings/types";
 import type { WeatherParameter } from "@/types/shared";
@@ -223,6 +224,32 @@ export function SettingsView({ page }: { page: SettingsPage }) {
   // 3–10 and the singular "دقيقة" otherwise; English "min" is invariant.
   const minutesUnit = (n: number) =>
     t(n >= 3 && n <= 10 ? "settings.unit.minutesPlural" : "settings.unit.minutes");
+
+  // Build the valid-range + max-rate cells client-side from the rule's raw
+  // numbers, so the "to", unit, and "min" all follow the active locale (the
+  // server-built strings only translate via exact dataDict matches). Also handles
+  // one-sided bounds without the stray "to" the old parser produced.
+  const rangeTo = locale === "ar" ? "إلى" : "to";
+  const unitOf = (rule: ValidationRule) => {
+    const u = rule.parameter ? paramUnit(rule.parameter) : "";
+    return u ? " " + td(u) : "";
+  };
+  const displayRange = (rule: ValidationRule) => {
+    const unit = unitOf(rule);
+    const lo = rule.validRangeMin;
+    const hi = rule.validRangeMax;
+    if (lo != null && hi != null) return `${lo} ${rangeTo} ${hi}${unit}`;
+    if (hi != null) return `≤ ${hi}${unit}`;
+    if (lo != null) return `≥ ${lo}${unit}`;
+    return "—";
+  };
+  const displayMaxRate = (rule: ValidationRule) => {
+    if (rule.maxRateOfChange == null) return "—";
+    const per = rule.rateIntervalMin
+      ? ` / ${rule.rateIntervalMin} ${minutesUnit(rule.rateIntervalMin)}`
+      : "";
+    return `${rule.maxRateOfChange}${unitOf(rule)}${per}`;
+  };
 
   const [active, setActive] = React.useState<SectionId>("appearance");
   const [dirty, setDirty] = React.useState(false);
@@ -497,12 +524,12 @@ export function SettingsView({ page }: { page: SettingsPage }) {
                       </TableRow>
                     ) : (
                       rules.map((rule) => (
-                        <TableRow key={rule.metric} className={tableBodyRowClass}>
+                        <TableRow key={rule.id} className={tableBodyRowClass}>
                           <TableCell className="ps-4 font-semibold text-foreground">
                             {td(rule.metric)}
                           </TableCell>
-                          <TableCell className="tabular-nums text-muted-foreground">{td(rule.validRange)}</TableCell>
-                          <TableCell className="tabular-nums text-muted-foreground">{td(rule.maxRate)}</TableCell>
+                          <TableCell className="tabular-nums text-muted-foreground">{displayRange(rule)}</TableCell>
+                          <TableCell className="tabular-nums text-muted-foreground">{displayMaxRate(rule)}</TableCell>
                           <TableCell>
                             {rule.active ? (
                               <Badge variant="normal" className="gap-1.5 uppercase tracking-wide">

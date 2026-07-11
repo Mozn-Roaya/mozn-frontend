@@ -34,6 +34,7 @@ import { TableCell, TableRow, tableBodyRowClass } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import type { InboxItem } from "@/features/alert-inbox/types";
 import { parseContext, SEVERITY } from "./inbox-meta";
+import { RelativeTime } from "@/components/common/relative-time";
 
 /** Plain-text tone for the SLA cell — colour is the only urgency cue here. */
 const SLA_TEXT: Record<string, string> = {
@@ -172,7 +173,7 @@ export function InboxAlertRow({
 
         {/* Waiting + SLA */}
         <TableCell className="whitespace-nowrap">
-          <span className="text-sm text-foreground">{td(item.timeAgo)}</span>
+          <span className="text-sm text-foreground"><RelativeTime iso={item.issuedAt} /></span>
           <span className={cn("ms-2 text-xs", SLA_TEXT[item.sla.tone])}>
             {td(item.sla.label)}
           </span>

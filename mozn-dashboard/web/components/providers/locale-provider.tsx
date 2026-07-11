@@ -46,28 +46,30 @@ export function LocaleProvider({
   const [locale, setLocaleState] = React.useState<Locale>(initialLocale);
   const router = useRouter();
 
-  // Keep <html dir/lang> in lockstep with the active locale. The server already
-  // sets it from the cookie, but this self-heals any SSR/client mismatch (e.g.
-  // a cookie set client-side on a previous visit) so RTL is never half-applied.
+  // Keep <html dir/lang> in lockstep with the active locale. Runs on the same
+  // commit as the locale state change below, so the RTL flip lands with the
+  // re-rendered content. Also self-heals any SSR/client cookie mismatch.
   React.useEffect(() => {
     applyToDocument(locale);
   }, [locale]);
 
   const setLocale = React.useCallback(
     (next: Locale) => {
-      setLocaleState(next);
+      if (next === locale) return;
       try {
         document.cookie = `${COOKIE}=${next};path=/;max-age=31536000;samesite=lax`;
       } catch {
         /* cookies unavailable; in-memory only */
       }
-      applyToDocument(next);
-      // Client components flip via context immediately, but server components
-      // (page headings, backend data) are rendered from the cookie — refresh so
-      // they re-render in the new locale instead of showing the previous one.
+      // Flip the client locale immediately: the chrome, page headings, and every
+      // t()/td()-translated value re-render at once with NO server round-trip — so
+      // the switch is instant. router.refresh() then updates the few
+      // server-computed strings (relative times, audit action labels) in the
+      // background; the visible switch has already happened.
+      setLocaleState(next);
       router.refresh();
     },
-    [router],
+    [router, locale],
   );
 
   const t = React.useCallback(

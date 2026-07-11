@@ -79,6 +79,7 @@ export const dataDict: Record<string, string> = {
   "mm/hr": "ملم/س",
   "km/h": "كم/س",
   "°C": "°م",
+  "mm": "ملم",
   // Change-history entries (relative time)
   "2 days ago": "قبل يومين",
   "5 days ago": "قبل 5 أيام",
@@ -126,6 +127,18 @@ export const dataDict: Record<string, string> = {
   "Advisory matches": "مطابقات الإرشاد",
   "Watch & warning matches": "مطابقات المراقبة والتحذير",
   "Compound & warning-tier (audible)": "المركّبة ومستوى التحذير (مسموع)",
+  // Parameter display labels (paramLabel) — shown across thresholds, alerts,
+  // alert history, and validation rules. Keep in sync with PARAM_LABEL in mappers.ts.
+  "Rainfall rate": "معدل هطول الأمطار",
+  "Daily rainfall": "الأمطار اليومية",
+  "Wind gust": "هبّة الرياح",
+  "High temperature": "درجة حرارة مرتفعة",
+  "Low temperature": "درجة حرارة منخفضة",
+  "Air pressure": "الضغط الجوي",
+  "Humidity": "الرطوبة",
+  "UV index": "مؤشر الأشعة فوق البنفسجية",
+  "Dew point": "نقطة الندى",
+  "Solar radiation": "الإشعاع الشمسي",
   // Validation rules — metric / range / rate
   "Temperature": "درجة الحرارة",
   "Wind": "رياح",
@@ -135,7 +148,9 @@ export const dataDict: Record<string, string> = {
   "0 to 100 %": "0 إلى 100 %",
   "15° per 15 min": "15° لكل 15 دقيقة",
   "50 mm per 5 min": "50 ملم لكل 5 دقائق",
-  // Validation note
+  // Validation note (section caption)
+  "Readings outside these bounds are flagged and withheld from the public map.":
+    "القراءات خارج هذه الحدود يتم وسمها وحجبها عن الخريطة العامة.",
   "When flagged: data is not published to the public map and cannot trigger inbox alerts. The MOZN team is notified separately, and citizens see the last valid reading labelled “Data under review”.":
     "عند وضع العلامة: لا تُنشر البيانات على الخريطة العامة ولا يمكنها تشغيل تنبيهات الصندوق. يُبلَّغ فريق مزن بشكل منفصل، ويرى المواطنون آخر قراءة صالحة موسومة بـ ”بيانات قيد المراجعة“.",
 };

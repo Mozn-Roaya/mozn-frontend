@@ -16,6 +16,8 @@ export interface UserRow {
   role: UserRole;
   regions: string;
   lastActive: string;
+  /** Raw ISO of last activity — rendered client-side so it re-localizes instantly. */
+  lastActiveAt: string | null;
   active: boolean;
   /** Optional contact metadata (A4.1). Absent on backend-seeded rows. */
   phone?: string;

@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/toaster";
 import type { ThresholdsPage } from "@/features/thresholds/types";
+import { RelativeTime } from "@/components/common/relative-time";
 
 type Change = ThresholdsPage["changes"][number];
 
@@ -88,7 +89,7 @@ export function ChangeHistory({ changes }: { changes: ThresholdsPage["changes"] 
                   {td(c.change)}
                 </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  {t("thresholds.history.by", { name: td(c.by) })} · {td(c.when)}
+                  {t("thresholds.history.by", { name: td(c.by) })} · <RelativeTime iso={c.whenAt} />
                 </p>
               </div>
               <Button

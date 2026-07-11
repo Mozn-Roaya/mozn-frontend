@@ -36,7 +36,7 @@ import {
   tableHeaderRowClass,
 } from "@/components/ui/table";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { useLocale, useT, useTD } from "@/components/providers/locale-provider";
+import { useLocale, useT } from "@/components/providers/locale-provider";
 import { useRole } from "@/components/providers/role-provider";
 
 type TFunction = (key: string, vars?: Record<string, string | number>) => string;
@@ -77,6 +77,7 @@ import Link from "next/link";
 import { StationSummaryCard } from "@/components/station-detail/station-summary-card";
 import { detailFromStationRow } from "@/components/station-detail/station-detail";
 import { useRouter } from "next/navigation";
+import { RelativeTime } from "@/components/common/relative-time";
 
 const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
@@ -118,7 +119,6 @@ const STATUS_DOT: Record<string, string> = {
 export function StationsTable({ page }: { page: StationsPage }) {
   const { locale } = useLocale();
   const t = useT();
-  const td = useTD();
   const router = useRouter();
   // Station actions follow the account's real permissions. `readOnly` (no
   // selection / bulk bar / edit) means it can't update stations; create + delete
@@ -431,7 +431,7 @@ export function StationsTable({ page }: { page: StationsPage }) {
                     <TableCell>
                       <StationStatusBadge status={row.status} />
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{td(row.lastReading)}</TableCell>
+                    <TableCell className="text-muted-foreground"><RelativeTime iso={row.lastReadingAt} /></TableCell>
                     <TableCell className="text-end" onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>

@@ -27,6 +27,8 @@ export interface InboxItem {
   stationId?: string;
   context: string;
   timeAgo: string;
+  /** Raw ISO of when the alert was issued — rendered client-side (RelativeTime). */
+  issuedAt: string;
   /** Alert age in seconds at fetch time — the client recomputes the SLA label
    * from this + the operator's SLA-minutes preference (no live Date in render). */
   ageSeconds: number;
