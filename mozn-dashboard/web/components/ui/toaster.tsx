@@ -50,6 +50,16 @@ export function toast(message: string, tone: ToastTone = "success", duration = 4
   emit();
 }
 
+// Drop every pending toast. The store is module-level, so a toast fired just
+// before navigating away from the shell (e.g. sign-out) would otherwise linger
+// and re-appear once a <Toaster/> next mounts. Call this at session boundaries
+// (login) to start clean.
+export function clearToasts() {
+  if (toasts.length === 0) return;
+  toasts = [];
+  emit();
+}
+
 // Tinted status chip per tone — the same icon-chip language the dashboard uses
 // in dialog headers and settings section heads, so a toast reads as part of the
 // system rather than a foreign pill.

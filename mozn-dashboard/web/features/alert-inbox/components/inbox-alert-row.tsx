@@ -42,12 +42,23 @@ const SLA_TEXT: Record<string, string> = {
   muted: "text-muted-foreground",
 };
 
+/** Per-action capabilities for a row, computed once by the parent from the
+ * account's real permissions — each flag maps to the endpoint its control hits. */
+export type InboxRowCaps = {
+  acknowledge: boolean; // alerts.acknowledge
+  unacknowledge: boolean; // alerts.unacknowledge (reopen)
+  confirm: boolean; // alerts.confirm
+  reject: boolean; // alerts.reject (dismiss)
+  escalate: boolean; // alerts.escalate
+  setMaintenance: boolean; // stations.update
+};
+
 export function InboxAlertRow({
   item,
   acknowledged,
   escalated,
   selected,
-  readOnly,
+  caps,
   onToggleSelect,
   onAcknowledge,
   onReopen,
@@ -61,7 +72,7 @@ export function InboxAlertRow({
   acknowledged: boolean;
   escalated: boolean;
   selected: boolean;
-  readOnly?: boolean;
+  caps: InboxRowCaps;
   onToggleSelect: () => void;
   onAcknowledge: (id: string, note: string) => void;
   onReopen: (id: string) => void;
@@ -77,6 +88,14 @@ export function InboxAlertRow({
   const ctx = parseContext(td(item.context));
   const primary = item.metrics[0];
   const extra = item.metrics.length - 1;
+
+  // Show the acknowledge button / row menu / placeholder based on which of this
+  // account's per-action permissions apply to the row's current state.
+  const showAckButton = !acknowledged && caps.acknowledge;
+  const showMenu = acknowledged
+    ? caps.unacknowledge || caps.setMaintenance || caps.reject
+    : caps.confirm || caps.escalate || caps.setMaintenance || caps.reject;
+  const showDash = !acknowledged && !showAckButton && !showMenu;
 
   const [ackOpen, setAckOpen] = React.useState(false);
   const [dismissOpen, setDismissOpen] = React.useState(false);
@@ -167,16 +186,14 @@ export function InboxAlertRow({
                 <Check className="size-3.5" aria-hidden />
                 {t("inbox.chip.acknowledged")}
               </span>
-            ) : readOnly ? null : (
+            ) : showAckButton ? (
               <Button size="sm" onClick={() => setAckOpen(true)}>
                 <Check className="size-4" />
                 {t("inbox.action.acknowledge")}
               </Button>
-            )}
+            ) : null}
 
-            {readOnly ? (
-              acknowledged ? null : <span className="text-xs text-muted-foreground">—</span>
-            ) : (
+            {showMenu ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -190,42 +207,54 @@ export function InboxAlertRow({
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   {acknowledged ? (
-                    <DropdownMenuItem onClick={() => onReopen(item.id)}>
-                      <RotateCcw className="size-4" />
-                      {t("inbox.action.reopen")}
-                    </DropdownMenuItem>
+                    caps.unacknowledge ? (
+                      <DropdownMenuItem onClick={() => onReopen(item.id)}>
+                        <RotateCcw className="size-4" />
+                        {t("inbox.action.reopen")}
+                      </DropdownMenuItem>
+                    ) : null
                   ) : (
                     <>
-                      <DropdownMenuItem onClick={() => onConfirm(item.id)}>
-                        <ShieldCheck className="size-4" />
-                        {t("inbox.action.confirm")}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        disabled={escalated}
-                        onClick={() => onEscalate(item.id)}
-                      >
-                        <ChevronsUp className="size-4" />
-                        {escalated ? t("inbox.action.escalated") : t("inbox.action.escalate")}
-                      </DropdownMenuItem>
+                      {caps.confirm ? (
+                        <DropdownMenuItem onClick={() => onConfirm(item.id)}>
+                          <ShieldCheck className="size-4" />
+                          {t("inbox.action.confirm")}
+                        </DropdownMenuItem>
+                      ) : null}
+                      {caps.escalate ? (
+                        <DropdownMenuItem
+                          disabled={escalated}
+                          onClick={() => onEscalate(item.id)}
+                        >
+                          <ChevronsUp className="size-4" />
+                          {escalated ? t("inbox.action.escalated") : t("inbox.action.escalate")}
+                        </DropdownMenuItem>
+                      ) : null}
                     </>
                   )}
-                  <DropdownMenuItem
-                    disabled={!item.stationId}
-                    onClick={() => item.stationId && onSetMaintenance(item.stationId)}
-                  >
-                    <Wrench className="size-4" />
-                    {t("inbox.action.setMaintenance")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setDismissOpen(true)}
-                    className="text-text-warning focus:bg-status-warning/10 focus:text-text-warning"
-                  >
-                    <Trash2 className="size-4" />
-                    {t("inbox.action.dismiss")}
-                  </DropdownMenuItem>
+                  {caps.setMaintenance ? (
+                    <DropdownMenuItem
+                      disabled={!item.stationId}
+                      onClick={() => item.stationId && onSetMaintenance(item.stationId)}
+                    >
+                      <Wrench className="size-4" />
+                      {t("inbox.action.setMaintenance")}
+                    </DropdownMenuItem>
+                  ) : null}
+                  {caps.reject ? (
+                    <DropdownMenuItem
+                      onClick={() => setDismissOpen(true)}
+                      className="text-text-warning focus:bg-status-warning/10 focus:text-text-warning"
+                    >
+                      <Trash2 className="size-4" />
+                      {t("inbox.action.dismiss")}
+                    </DropdownMenuItem>
+                  ) : null}
                 </DropdownMenuContent>
               </DropdownMenu>
-            )}
+            ) : showDash ? (
+              <span className="text-xs text-muted-foreground">—</span>
+            ) : null}
           </div>
         </TableCell>
       </TableRow>

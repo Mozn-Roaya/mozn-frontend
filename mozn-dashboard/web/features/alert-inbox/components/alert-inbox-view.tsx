@@ -73,8 +73,21 @@ export function AlertInboxView({ page }: { page: AlertInboxPage }) {
   const t = useT();
   const td = useTD();
   const router = useRouter();
-  const { readOnly } = useRole();
+  const { can } = useRole();
   const { slaAckMinutes } = usePreferences();
+  // Per-action capabilities, each keyed to the endpoint that action calls, so a
+  // control appears exactly when the account holds that specific permission.
+  const caps = React.useMemo(
+    () => ({
+      acknowledge: can("alerts.acknowledge"), // POST /api/alerts/:id/acknowledge
+      unacknowledge: can("alerts.unacknowledge"), // POST /api/alerts/:id/unacknowledge
+      confirm: can("alerts.confirm"), // POST /api/alerts/:id/confirm
+      reject: can("alerts.reject"), // POST /api/alerts/:id/reject (dismiss)
+      escalate: can("alerts.escalate"), // POST /api/alerts/:id/escalate
+      setMaintenance: can("stations.update"), // PUT /api/stations/:id
+    }),
+    [can],
+  );
   // Multi-select severity filter (empty = all), shadcn faceted-filter style.
   const [severities, setSeverities] = React.useState<string[]>([]);
   const [query, setQuery] = React.useState("");
@@ -379,23 +392,23 @@ export function AlertInboxView({ page }: { page: AlertInboxPage }) {
       ) : (
         <>
           <SelectionBar count={selected.size} onClear={() => setSelected(new Set())}>
-            {!readOnly ? (
-              <>
-                <Button size="sm" variant="outline" className="h-8" onClick={bulkConfirm} disabled={bulkBusy}>
-                  <ShieldCheck className="size-3.5" />
-                  {t("inbox.action.confirm")}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 text-text-warning hover:text-text-warning"
-                  onClick={() => setBulkDismissOpen(true)}
-                  disabled={bulkBusy}
-                >
-                  <Trash2 className="size-3.5" />
-                  {t("inbox.action.dismiss")}
-                </Button>
-              </>
+            {caps.confirm ? (
+              <Button size="sm" variant="outline" className="h-8" onClick={bulkConfirm} disabled={bulkBusy}>
+                <ShieldCheck className="size-3.5" />
+                {t("inbox.action.confirm")}
+              </Button>
+            ) : null}
+            {caps.reject ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-text-warning hover:text-text-warning"
+                onClick={() => setBulkDismissOpen(true)}
+                disabled={bulkBusy}
+              >
+                <Trash2 className="size-3.5" />
+                {t("inbox.action.dismiss")}
+              </Button>
             ) : null}
           </SelectionBar>
           <Table>
@@ -440,7 +453,7 @@ export function AlertInboxView({ page }: { page: AlertInboxPage }) {
                   acknowledged={acked.has(item.id)}
                   escalated={escalated.has(item.id)}
                   selected={selected.has(item.id)}
-                  readOnly={readOnly}
+                  caps={caps}
                   onToggleSelect={() => toggleOne(item.id)}
                   onAcknowledge={acknowledge}
                   onReopen={reopen}

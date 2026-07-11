@@ -11,7 +11,7 @@ import { dict } from "@/lib/i18n";
 import { useLocale } from "@/components/providers/locale-provider";
 import { useRole } from "@/components/providers/role-provider";
 import type { StationRow, StationsPage } from "@/types/stations";
-import { NAV_GROUPS } from "./nav-config";
+import { NAV_GROUPS, canAccessNav } from "./nav-config";
 
 // Station status → dot colour. Mirrors STATUS_DOT in the Stations table so the
 // palette speaks the same visual language.
@@ -74,7 +74,7 @@ export function CommandPalette({
 }) {
   const router = useRouter();
   const { locale, t, td } = useLocale();
-  const { isGov, assignedRegion } = useRole();
+  const { isGov, assignedRegion, can } = useRole();
 
   const [query, setQuery] = React.useState("");
   const [stations, setStations] = React.useState<StationRow[] | null>(null);
@@ -113,10 +113,11 @@ export function CommandPalette({
       });
   }, [open, stations]);
 
-  // Nav destinations, scoped to the active role, with both locales searchable.
+  // Nav destinations, scoped to the account's permissions (same rule as the
+  // sidebar), with both locales searchable.
   const navItems = React.useMemo<Item[]>(() => {
     return NAV_GROUPS.flatMap((g) => g.items)
-      .filter((i) => i.href && (!isGov || i.gov))
+      .filter((i) => i.href && canAccessNav(i, can))
       .map((i) => {
         const entry = dict[i.labelKey];
         return {
@@ -128,7 +129,7 @@ export function CommandPalette({
           icon: i.icon,
         };
       });
-  }, [isGov, t]);
+  }, [can, t]);
 
   // Station destinations, region-scoped for gov roles.
   const stationItems = React.useMemo<Item[]>(() => {

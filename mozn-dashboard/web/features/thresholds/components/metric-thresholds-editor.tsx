@@ -133,7 +133,7 @@ export function MetricThresholdsEditor({
   const td = useTD();
   const { locale } = useLocale();
   const router = useRouter();
-  const { readOnly, can } = useRole();
+  const { can } = useRole();
   const [saving, setSaving] = React.useState(false);
 
   const [values, setValues] = React.useState<Record<string, MetricValues>>(() =>
@@ -268,7 +268,7 @@ export function MetricThresholdsEditor({
   // this only sends the new value. Blocked when read-only or monotonic-invalid.
   const anyInvalid = TIERS.some((tier) => invalid(tier));
   const save = async () => {
-    if (readOnly || saving) return;
+    if (!can("thresholds.update") || saving) return;
     if (anyInvalid) {
       toast(t("thresholds.saveInvalid"), "info");
       return;
@@ -574,7 +574,7 @@ export function MetricThresholdsEditor({
             ? t("thresholds.impact.calculating")
             : t("thresholds.impact.note", { count: footerImpact })}
         </p>
-        <Button className="shrink-0" onClick={save} disabled={readOnly || saving || anyInvalid}>
+        <Button className="shrink-0" onClick={save} disabled={!can("thresholds.update") || saving || anyInvalid}>
           <Check className="size-4" />
           {t("thresholds.saveApply")}
         </Button>

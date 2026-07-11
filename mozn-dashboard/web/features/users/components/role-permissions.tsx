@@ -44,7 +44,8 @@ function setsEqual(a: Set<string>, b: Set<string>): boolean {
 export function RolePermissions({ matrix }: { matrix: RoleMatrix }) {
   const t = useT();
   const router = useRouter();
-  const { readOnly } = useRole();
+  const { can } = useRole();
+  const canManageRoles = can("roles.manage");
 
   const [grants, setGrants] = React.useState<Record<string, Set<string>>>(() => seed(matrix));
   const [saving, setSaving] = React.useState(false);
@@ -162,7 +163,7 @@ export function RolePermissions({ matrix }: { matrix: RoleMatrix }) {
                         </span>
                       </TableCell>
                       {matrix.roles.map((r) => {
-                        const locked = isLocked(r.rank) || readOnly;
+                        const locked = isLocked(r.rank) || !canManageRoles;
                         const checked = (grants[r.id] ?? new Set()).has(p.id);
                         return (
                           <TableCell
@@ -189,7 +190,7 @@ export function RolePermissions({ matrix }: { matrix: RoleMatrix }) {
         </div>
       </Card>
 
-      {dirty && !readOnly ? (
+      {dirty && canManageRoles ? (
         <div className="sticky bottom-4 z-10 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3 shadow-card motion-safe:animate-in motion-safe:slide-in-from-bottom-2">
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
             <span className="size-2 rounded-full bg-status-advisory" aria-hidden />

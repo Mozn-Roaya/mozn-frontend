@@ -6,7 +6,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useT } from "@/components/providers/locale-provider";
 import { useRole } from "@/components/providers/role-provider";
-import { NAV_GROUPS, type NavItem } from "./nav-config";
+import { NAV_GROUPS, canAccessNav, type NavItem } from "./nav-config";
 
 function NavRow({
   item,
@@ -90,14 +90,13 @@ function NavRow({
  * the item set is scoped to the active role (Gov roles see a subset). */
 export function NavList({ onNavigate }: { onNavigate?: () => void }) {
   const t = useT();
-  const { isGov, can } = useRole();
+  const { can } = useRole();
 
+  // Every role sees exactly the screens its permissions allow — the sidebar is
+  // fully permission-driven (grant a role a view perm and its item appears).
   const groups = NAV_GROUPS.map((group) => ({
     ...group,
-    // Gov roles: the region-scoped subset (by the `gov` flag). Non-Gov roles:
-    // everything they hold the view permission for — so an `operator` doesn't see
-    // admin screens (Users/Settings) it lacks access to and would only 403 on.
-    items: group.items.filter((i) => (isGov ? i.gov : !i.permission || can(i.permission))),
+    items: group.items.filter((i) => canAccessNav(i, can)),
   })).filter((group) => group.items.length > 0);
 
   return (

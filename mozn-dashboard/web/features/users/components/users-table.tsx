@@ -174,7 +174,10 @@ export function UsersTable({
   const t = useT();
   const td = useTD();
   const router = useRouter();
-  const { readOnly } = useRole();
+  const { can } = useRole();
+  const canCreateUser = can("users.create");
+  const canUpdateUser = can("users.update");
+  const canDeleteUser = can("users.delete");
   // Server data is the source of truth; after each write we router.refresh().
   const rows = page.users;
   const [roles, setRoles] = React.useState<string[]>([]);
@@ -242,7 +245,8 @@ export function UsersTable({
   };
 
   const submitDraft = async () => {
-    if (readOnly || saving) return;
+    // Create dialog needs users.create; edit dialog needs users.update.
+    if ((editingId ? !canUpdateUser : !canCreateUser) || saving) return;
     const name = draft.name.trim();
     const email = draft.email.trim();
     if (!name || !email) {
@@ -528,26 +532,32 @@ export function UsersTable({
       </div>
 
       <SelectionBar count={selected.size} onClear={() => setSelected(new Set())}>
-        {!readOnly ? (
+        {canUpdateUser || canDeleteUser ? (
           <>
-            <Button size="sm" variant="outline" className="h-8" onClick={() => bulkSetActive(true)} disabled={bulkBusy}>
-              <UserCheck className="size-3.5" />
-              {t("users.activate")}
-            </Button>
-            <Button size="sm" variant="outline" className="h-8" onClick={() => bulkSetActive(false)} disabled={bulkBusy}>
-              <UserX className="size-3.5" />
-              {t("users.deactivate")}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-8 text-text-warning hover:text-text-warning"
-              onClick={() => setBulkDeleteOpen(true)}
-              disabled={bulkBusy}
-            >
-              <Trash2 className="size-3.5" />
-              {t("users.removeUser")}
-            </Button>
+            {canUpdateUser ? (
+              <>
+                <Button size="sm" variant="outline" className="h-8" onClick={() => bulkSetActive(true)} disabled={bulkBusy}>
+                  <UserCheck className="size-3.5" />
+                  {t("users.activate")}
+                </Button>
+                <Button size="sm" variant="outline" className="h-8" onClick={() => bulkSetActive(false)} disabled={bulkBusy}>
+                  <UserX className="size-3.5" />
+                  {t("users.deactivate")}
+                </Button>
+              </>
+            ) : null}
+            {canDeleteUser ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-text-warning hover:text-text-warning"
+                onClick={() => setBulkDeleteOpen(true)}
+                disabled={bulkBusy}
+              >
+                <Trash2 className="size-3.5" />
+                {t("users.removeUser")}
+              </Button>
+            ) : null}
           </>
         ) : null}
       </SelectionBar>
@@ -621,7 +631,7 @@ export function UsersTable({
                   )}
                 </TableCell>
                 <TableCell className="text-end">
-                  {!readOnly ? (
+                  {canUpdateUser || canDeleteUser ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
@@ -634,30 +644,36 @@ export function UsersTable({
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => openEdit(user)}>
-                        <Pencil className="size-4" />
-                        {t("users.editUser")}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => toggleActive(user)}>
-                        {user.active ? (
-                          <>
-                            <UserX className="size-4" />
-                            {t("users.deactivate")}
-                          </>
-                        ) : (
-                          <>
-                            <UserCheck className="size-4" />
-                            {t("users.activate")}
-                          </>
-                        )}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => removeUser(user)}
-                        className="text-text-warning focus:bg-status-warning/10 focus:text-text-warning"
-                      >
-                        <Trash2 className="size-4" />
-                        {t("users.removeUser")}
-                      </DropdownMenuItem>
+                      {canUpdateUser ? (
+                        <>
+                          <DropdownMenuItem onClick={() => openEdit(user)}>
+                            <Pencil className="size-4" />
+                            {t("users.editUser")}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => toggleActive(user)}>
+                            {user.active ? (
+                              <>
+                                <UserX className="size-4" />
+                                {t("users.deactivate")}
+                              </>
+                            ) : (
+                              <>
+                                <UserCheck className="size-4" />
+                                {t("users.activate")}
+                              </>
+                            )}
+                          </DropdownMenuItem>
+                        </>
+                      ) : null}
+                      {canDeleteUser ? (
+                        <DropdownMenuItem
+                          onClick={() => removeUser(user)}
+                          className="text-text-warning focus:bg-status-warning/10 focus:text-text-warning"
+                        >
+                          <Trash2 className="size-4" />
+                          {t("users.removeUser")}
+                        </DropdownMenuItem>
+                      ) : null}
                     </DropdownMenuContent>
                   </DropdownMenu>
                   ) : null}
@@ -904,7 +920,7 @@ export function UsersTable({
               form="user-form"
               disabled={
                 saving ||
-                readOnly ||
+                (editingId ? !canUpdateUser : !canCreateUser) ||
                 !draft.name.trim() ||
                 !draft.email.trim() ||
                 (!editingId && draft.password.length < MIN_PASSWORD)

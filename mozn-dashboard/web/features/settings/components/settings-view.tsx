@@ -217,7 +217,7 @@ export function SettingsView({ page }: { page: SettingsPage }) {
   const { t, td, locale, setLocale } = useLocale();
   const { theme, setTheme } = useTheme();
   const router = useRouter();
-  const { readOnly } = useRole();
+  const { can } = useRole();
 
   // Minutes unit that agrees with the count: Arabic uses the plural "دقائق" for
   // 3–10 and the singular "دقيقة" otherwise; English "min" is invariant.
@@ -308,7 +308,7 @@ export function SettingsView({ page }: { page: SettingsPage }) {
   };
 
   const handleSave = async () => {
-    if (readOnly) return;
+    if (!can("settings.manage")) return;
     // Operational preferences (units, SLA, thresholds, refresh, region, …) have
     // no backend keys — persist them to localStorage exactly as before.
     savePreferences(prefs);
@@ -432,7 +432,7 @@ export function SettingsView({ page }: { page: SettingsPage }) {
                     <Switch
                       checked={prefs.notif[pref.id] ?? false}
                       onCheckedChange={(v) => setNotif(pref.id, v)}
-                      disabled={readOnly}
+                      disabled={!can("settings.manage")}
                       aria-label={td(pref.title)}
                     />
                   </Row>
@@ -466,7 +466,7 @@ export function SettingsView({ page }: { page: SettingsPage }) {
                   </h3>
                   <p className="text-xs text-muted-foreground">{t("settings.validation.groupDesc")}</p>
                 </div>
-                {!readOnly ? (
+                {can("validation_rules.manage") ? (
                   <Button variant="outline" size="sm" className="shrink-0" onClick={() => setCreatingRule(true)}>
                     <Plus className="size-4" />
                     {t("settings.validation.addRule")}
@@ -523,7 +523,7 @@ export function SettingsView({ page }: { page: SettingsPage }) {
                                 size="icon"
                                 className="size-8"
                                 onClick={() => setEditingRule(rule)}
-                                disabled={readOnly}
+                                disabled={!can("validation_rules.manage")}
                                 aria-label={t("settings.table.edit")}
                               >
                                 <Pencil className="size-4 text-muted-foreground" />
@@ -533,7 +533,7 @@ export function SettingsView({ page }: { page: SettingsPage }) {
                                 size="icon"
                                 className="size-8 text-muted-foreground hover:text-text-warning"
                                 onClick={() => setDeleteTarget(rule)}
-                                disabled={readOnly}
+                                disabled={!can("validation_rules.manage")}
                                 aria-label={t("settings.validation.delete")}
                               >
                                 <Trash2 className="size-4" />
@@ -673,7 +673,7 @@ export function SettingsView({ page }: { page: SettingsPage }) {
             <Button variant="ghost" size="sm" onClick={handleDiscard}>
               {t("settings.discard")}
             </Button>
-            <Button size="sm" onClick={handleSave} disabled={readOnly}>
+            <Button size="sm" onClick={handleSave} disabled={!can("settings.manage")}>
               <Check className="size-4" />
               {t("common.save")}
             </Button>
@@ -686,7 +686,7 @@ export function SettingsView({ page }: { page: SettingsPage }) {
           rule={editingRule}
           onOpenChange={(open) => !open && setEditingRule(null)}
           onSave={async (next) => {
-            if (readOnly) return;
+            if (!can("validation_rules.manage")) return;
             // Persist the structured numeric bounds (null clears a bound) plus
             // the active flag (backed by the rule's is_active column).
             const res = await fetch(`${BASE}/api/validation-rules/${next.id}`, {
@@ -719,7 +719,7 @@ export function SettingsView({ page }: { page: SettingsPage }) {
           regions={page.regions}
           onOpenChange={(open) => !open && setCreatingRule(false)}
           onCreate={async (input) => {
-            if (readOnly) return;
+            if (!can("validation_rules.manage")) return;
             const res = await fetch(`${BASE}/api/validation-rules`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -758,7 +758,7 @@ export function SettingsView({ page }: { page: SettingsPage }) {
               type="button"
               variant="destructive"
               onClick={async () => {
-                if (!deleteTarget || readOnly) return;
+                if (!deleteTarget || !can("validation_rules.manage")) return;
                 const res = await fetch(`${BASE}/api/validation-rules/${deleteTarget.id}`, { method: "DELETE" });
                 const json = (await res.json().catch(() => ({}))) as { error?: string };
                 if (!res.ok) {

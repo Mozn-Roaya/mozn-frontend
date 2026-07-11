@@ -122,8 +122,9 @@ export function StationsTable({ page }: { page: StationsPage }) {
   const router = useRouter();
   // Station actions follow the account's real permissions. `readOnly` (no
   // selection / bulk bar / edit) means it can't update stations; create + delete
-  // are gated separately. Region-scoped (Gov) accounts also only see their region.
-  const { isGov, assignedRegion, can } = useRole();
+  // are gated separately. Region scoping is handled by the backend (it returns
+  // only the account's regions), so the table renders whatever it receives.
+  const { can } = useRole();
   const canDelete = can("stations.delete");
   const readOnly = !can("stations.update");
   const nameOf = React.useCallback(
@@ -180,8 +181,6 @@ export function StationsTable({ page }: { page: StationsPage }) {
   const rows = React.useMemo(() => {
     const q = query.trim().toLowerCase();
     const filtered = allRows.filter((r) => {
-      // Region-scoped (Gov) accounts only see stations in their assigned region.
-      const matchesRegion = !isGov || !assignedRegion || r.region === assignedRegion;
       const matchesStatus =
         statuses.length === 0 || statuses.includes(r.status);
       const matchesQuery =
@@ -189,7 +188,7 @@ export function StationsTable({ page }: { page: StationsPage }) {
         r.name.toLowerCase().includes(q) ||
         r.region.toLowerCase().includes(q) ||
         r.nameAr.includes(query.trim());
-      return matchesRegion && matchesStatus && matchesQuery;
+      return matchesStatus && matchesQuery;
     });
 
     const dir = sort.dir === "asc" ? 1 : -1;
@@ -207,7 +206,7 @@ export function StationsTable({ page }: { page: StationsPage }) {
           );
       }
     });
-  }, [allRows, statuses, query, sort, nameOf, isGov, assignedRegion]);
+  }, [allRows, statuses, query, sort, nameOf]);
 
   // Client-side pagination. Selection + bulk actions still span the whole
   // filtered set; only the rendered rows are sliced to the current page.

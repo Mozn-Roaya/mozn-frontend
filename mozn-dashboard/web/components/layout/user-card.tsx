@@ -12,7 +12,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { toast } from "@/components/ui/toaster";
 import { useT } from "@/components/providers/locale-provider";
 import { useRole } from "@/components/providers/role-provider";
 
@@ -30,7 +29,9 @@ export function UserCard() {
     } catch {
       /* clear client state regardless */
     }
-    toast(t("account.signedOut"));
+    // No toast here: /login has no Toaster to show it, so it would otherwise
+    // linger in the module-level store and pop up after the next sign-in. The
+    // redirect to /login is the confirmation.
     router.replace("/login");
     router.refresh();
   }

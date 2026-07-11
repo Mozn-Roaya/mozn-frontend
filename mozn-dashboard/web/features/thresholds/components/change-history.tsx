@@ -32,7 +32,7 @@ export function ChangeHistory({ changes }: { changes: ThresholdsPage["changes"] 
   const t = useT();
   const td = useTD();
   const router = useRouter();
-  const { readOnly } = useRole();
+  const { can } = useRole();
   const [reverted, setReverted] = React.useState<Set<string>>(new Set());
   const [pending, setPending] = React.useState<Change | null>(null);
   const [saving, setSaving] = React.useState(false);
@@ -95,7 +95,7 @@ export function ChangeHistory({ changes }: { changes: ThresholdsPage["changes"] 
                 variant="ghost"
                 size="sm"
                 className="shrink-0 text-muted-foreground"
-                disabled={isReverted || readOnly}
+                disabled={isReverted || !can("thresholds.update")}
                 onClick={() => setPending(c)}
               >
                 <RotateCcw className="size-4" />

@@ -96,8 +96,13 @@ export function StationForm({
   const router = useRouter();
   const { resolvedTheme } = useTheme();
   const theme = resolvedTheme === "dark" ? "dark" : "light";
-  const { readOnly } = useRole();
+  const { can } = useRole();
   const [saving, setSaving] = React.useState(false);
+  // Persisting a station hits POST /api/stations (create) or PUT /api/stations/:id
+  // (edit); gate on the matching backend permission for the current mode.
+  const canPersistStation = can(mode === "create" ? "stations.create" : "stations.update");
+  // Emergency contacts persist via PUT /api/municipalities/:id.
+  const canEditContacts = can("municipalities.update");
 
   // Derive the editable defaults from the (edit-mode) station detail so a save
   // round-trips the real values instead of clobbering coords/sensors/interval.
@@ -179,7 +184,7 @@ export function StationForm({
   };
 
   const saveContacts = async () => {
-    if (readOnly || !form.municipalityId) return;
+    if (!canEditContacts || !form.municipalityId) return;
     if (
       contacts.emergencyServices === savedContactsRef.current.emergencyServices &&
       contacts.civilDefense === savedContactsRef.current.civilDefense
@@ -241,7 +246,7 @@ export function StationForm({
   );
 
   const save = async () => {
-    if (!canSave || saving || readOnly) return;
+    if (!canSave || saving || !canPersistStation) return;
     setSaving(true);
     try {
       const sensors = sensorsToParams(selectedSensors);
@@ -325,7 +330,7 @@ export function StationForm({
           <Button variant="outline" asChild>
             <Link href="/stations">{t("common.cancel")}</Link>
           </Button>
-          <Button onClick={save} disabled={!canSave || saving || readOnly}>
+          <Button onClick={save} disabled={!canSave || saving || !canPersistStation}>
             <Check className="size-4" />
             {t("stations.saveActivate")}
           </Button>
@@ -377,7 +382,7 @@ export function StationForm({
                   <Select
                     value={form.municipalityId}
                     onValueChange={selectMunicipality}
-                    disabled={readOnly}
+                    disabled={!canPersistStation}
                   >
                     <SelectTrigger id="st-municipality" className="w-full">
                       <div className="flex min-w-0 items-center gap-2">
@@ -505,7 +510,7 @@ export function StationForm({
                     id="st-emr-services"
                     dir="ltr"
                     inputMode="tel"
-                    readOnly={readOnly}
+                    readOnly={!canEditContacts}
                     disabled={contactsSaving}
                     value={contacts.emergencyServices}
                     onChange={(e) => setContacts((c) => ({ ...c, emergencyServices: e.target.value }))}
@@ -517,7 +522,7 @@ export function StationForm({
                     id="st-emr-civil"
                     dir="ltr"
                     inputMode="tel"
-                    readOnly={readOnly}
+                    readOnly={!canEditContacts}
                     disabled={contactsSaving}
                     value={contacts.civilDefense}
                     onChange={(e) => setContacts((c) => ({ ...c, civilDefense: e.target.value }))}

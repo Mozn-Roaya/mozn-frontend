@@ -23,7 +23,7 @@ export function UsersAccessTabs({
   regionOptions: RegionOption[];
 }) {
   const t = useT();
-  const { readOnly } = useRole();
+  const { can } = useRole();
   const [tab, setTab] = React.useState("list");
   // The "Add user" action lives here, outside the table Card, so it sits with
   // the page-level actions like every other screen. It triggers the table's
@@ -37,7 +37,7 @@ export function UsersAccessTabs({
           <TabsTrigger value="list">{t("users.tab.list")}</TabsTrigger>
           <TabsTrigger value="roles">{t("users.tab.roles")}</TabsTrigger>
         </TabsList>
-        {tab === "list" && !readOnly ? (
+        {tab === "list" && can("users.create") ? (
           <Button size="sm" onClick={() => openCreateRef.current?.()}>
             <Plus className="size-4" />
             {t("users.addUser")}

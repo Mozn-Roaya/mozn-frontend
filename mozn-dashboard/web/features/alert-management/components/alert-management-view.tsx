@@ -144,7 +144,7 @@ type SortKey = "severity" | "type" | "trigger" | "duration" | "status";
 export function AlertManagementView({ initialAlerts }: { initialAlerts: ManagedAlert[] }) {
   const { t, td, locale } = useLocale();
   const router = useRouter();
-  const { readOnly, can } = useRole();
+  const { can } = useRole();
   // Server-rendered live data is the source of truth; after each action we
   // router.refresh() to re-fetch rather than mutate a local copy.
   const alerts = initialAlerts;
@@ -486,28 +486,32 @@ export function AlertManagementView({ initialAlerts }: { initialAlerts: ManagedA
                     </TableCell>
                     <TableCell className="pe-4 align-top text-end">
                       <div className="flex items-center justify-end gap-1.5">
-                        {readOnly ? (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        ) : resolved ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => act(a.id, "reopen")}
-                            disabled={busyId === a.id}
-                          >
-                            <RotateCcw className="size-4" />
-                            {t("alertmgmt.action.reopen")}
-                          </Button>
-                        ) : (
-                          <>
+                        {resolved ? (
+                          can("alerts.reopen") ? (
                             <Button
                               size="sm"
-                              onClick={() => { setReason(""); setResolveTarget(a); }}
+                              variant="outline"
+                              onClick={() => act(a.id, "reopen")}
                               disabled={busyId === a.id}
                             >
-                              <CircleCheck className="size-4" />
-                              {t("alertmgmt.action.resolve")}
+                              <RotateCcw className="size-4" />
+                              {t("alertmgmt.action.reopen")}
                             </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )
+                        ) : can("alerts.resolve") || can("alerts.modify") ? (
+                          <>
+                            {can("alerts.resolve") ? (
+                              <Button
+                                size="sm"
+                                onClick={() => { setReason(""); setResolveTarget(a); }}
+                                disabled={busyId === a.id}
+                              >
+                                <CircleCheck className="size-4" />
+                                {t("alertmgmt.action.resolve")}
+                              </Button>
+                            ) : null}
                             {can("alerts.modify") ? (
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
@@ -536,6 +540,8 @@ export function AlertManagementView({ initialAlerts }: { initialAlerts: ManagedA
                               </DropdownMenu>
                             ) : null}
                           </>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
                         )}
                       </div>
                     </TableCell>

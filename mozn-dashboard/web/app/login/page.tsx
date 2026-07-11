@@ -13,6 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { BrandMark } from "@/components/layout/brand-mark";
+import { clearToasts } from "@/components/ui/toaster";
 
 /**
  * Dashboard sign-in. Posts credentials to the login route handler, which
@@ -43,6 +44,10 @@ export default function LoginPage() {
         setError(data.error ?? "Login failed");
         return;
       }
+      // Drop any toast left over from a previous session (e.g. a sign-out toast
+      // that never had a Toaster to display it on /login) so it doesn't pop up
+      // on the dashboard right after signing in.
+      clearToasts();
       // Full navigation so the server layout re-runs its auth gate with the
       // freshly-set cookie.
       router.replace("/");

@@ -7,49 +7,21 @@ import { Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/components/providers/locale-provider";
 import { useRole } from "@/components/providers/role-provider";
-import { NAV_GROUPS } from "./nav-config";
-
-// Routes a Gov role may open (mirrors the gov-flagged nav items: G1/G2/G3).
-const GOV_ALLOWED = ["/", "/stations", "/history"];
-
-function isAllowed(pathname: string): boolean {
-  return GOV_ALLOWED.some((p) =>
-    p === "/" ? pathname === "/" : pathname === p || pathname.startsWith(p + "/"),
-  );
-}
-
-/** View-permission a top-level route needs, from the nav config (matches the
- * nav-list gating). Undefined = no permission gate for this path. */
-function permissionForPath(pathname: string): string | undefined {
-  for (const group of NAV_GROUPS) {
-    for (const item of group.items) {
-      if (!item.href || !item.permission) continue;
-      const match =
-        item.href === "/"
-          ? pathname === "/"
-          : pathname === item.href || pathname.startsWith(item.href + "/");
-      if (match) return item.permission;
-    }
-  }
-  return undefined;
-}
+import { canAccessNav, navItemForPath } from "./nav-config";
 
 /**
- * Client-side access guard. Gov roles may only open their region-scoped screens;
- * non-Gov accounts are blocked from any screen whose view permission they lack
- * (e.g. an `operator` deep-linking to /users or /settings). Nav already hides
- * these — this covers direct URLs. The backend enforces the same on every call.
+ * Client-side access guard. Every account is blocked from any screen whose view
+ * permission it lacks (e.g. a gov role deep-linking to /users, or an operator to
+ * /settings) — the same permission the sidebar uses to show/hide the item, so nav
+ * and direct-URL access always agree. The backend enforces the same on every call.
  */
 export function RouteGuard({ children }: { children: React.ReactNode }) {
   const t = useT();
-  const { isGov, can } = useRole();
+  const { can } = useRole();
   const pathname = usePathname();
 
-  const requiredPerm = permissionForPath(pathname);
-  const govBlocked = isGov && !isAllowed(pathname);
-  const permBlocked = !isGov && requiredPerm !== undefined && !can(requiredPerm);
-
-  if (govBlocked || permBlocked) {
+  const item = navItemForPath(pathname);
+  if (item && !canAccessNav(item, can)) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-4 py-24 text-center">
         <span className="grid size-14 place-items-center rounded-2xl bg-muted text-muted-foreground">

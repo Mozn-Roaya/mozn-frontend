@@ -152,10 +152,13 @@ export function AlertTemplatesView({
   const { t } = useLocale();
   const { contactsForCity } = useAdminConfig();
   const router = useRouter();
-  const { readOnly, can } = useRole();
-  // Creating is gated on the real backend permission (not the coarse readOnly
-  // flag): "whoever logs in sees exactly what they can do".
+  const { can } = useRole();
+  // Every control is gated on the real backend permission for the endpoint it
+  // calls (not the coarse readOnly flag): "whoever logs in sees exactly what
+  // they can do". Create → POST, edit/save/steps → PUT, delete → DELETE.
   const canCreate = can("templates.create");
+  const canEdit = can("templates.update");
+  const canDelete = can("templates.delete");
   // The preview mirrors the citizen alert card, which shows national emergency
   // numbers; templates aren't city-scoped, so fall back to the national default.
   const contacts = contactsForCity();
@@ -307,7 +310,7 @@ export function AlertTemplatesView({
   const [deleteId, setDeleteId] = React.useState<string | null>(null);
   const deleteTarget = templates.find((tp) => tp.id === deleteId) ?? null;
   const confirmDelete = async () => {
-    if (!deleteId || readOnly) return;
+    if (!deleteId || !canDelete) return;
     const res = await fetch(`${BASE}/api/templates/${deleteId}`, { method: "DELETE" });
     const json = (await res.json().catch(() => ({}))) as { error?: string };
     if (!res.ok) {
@@ -343,7 +346,7 @@ export function AlertTemplatesView({
   const stepsDirty =
     steps.length !== active.steps.length ||
     steps.some((s, i) => s.en !== active.steps[i].en || s.ar !== active.steps[i].ar);
-  const canSave = !readOnly && (versionsDirty || stepsDirty);
+  const canSave = canEdit && (versionsDirty || stepsDirty);
 
   const Icon = EVENT_ICON[active.eventKey] ?? TriangleAlert;
   const eventName = eventLabel(active.eventKey);
@@ -372,7 +375,7 @@ export function AlertTemplatesView({
   };
 
   const save = async () => {
-    if (readOnly) return;
+    if (!canEdit) return;
     // The backend requires all four message versions and at least one guidance
     // step (each with no empty element), so validate before sending.
     if (VERSION_KEYS.some((k) => draft[k].trim() === "")) {
@@ -524,7 +527,7 @@ export function AlertTemplatesView({
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => setDeleteId(tp.id)}
-                          disabled={readOnly}
+                          disabled={!canDelete}
                           className="text-text-warning focus:bg-status-warning/10 focus:text-text-warning"
                         >
                           <Trash2 className="size-4" />
@@ -603,7 +606,7 @@ export function AlertTemplatesView({
                       value={draft[k]}
                       onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))}
                       onFocus={() => setPreviewKey(k)}
-                      disabled={readOnly}
+                      disabled={!canEdit}
                       dir={ar ? "rtl" : "ltr"}
                       rows={3}
                       className={cn(
@@ -657,8 +660,8 @@ export function AlertTemplatesView({
                   >
                     <button
                       type="button"
-                      draggable={!readOnly}
-                      disabled={readOnly}
+                      draggable={canEdit}
+                      disabled={!canEdit}
                       onDragStart={(e) => {
                         setDragStep(i);
                         e.dataTransfer.effectAllowed = "move";
@@ -689,7 +692,7 @@ export function AlertTemplatesView({
                       <Input
                         value={step.en}
                         dir="ltr"
-                        disabled={readOnly}
+                        disabled={!canEdit}
                         onChange={(e) => setStep(i, "en", e.target.value)}
                         placeholder={t("templates.stepHint.en")}
                         aria-label={t("templates.stepEn", { n: i + 1 })}
@@ -697,7 +700,7 @@ export function AlertTemplatesView({
                       <Input
                         value={step.ar}
                         dir="rtl"
-                        disabled={readOnly}
+                        disabled={!canEdit}
                         onChange={(e) => setStep(i, "ar", e.target.value)}
                         placeholder={t("templates.stepHint.ar")}
                         aria-label={t("templates.stepAr", { n: i + 1 })}
@@ -708,7 +711,7 @@ export function AlertTemplatesView({
                       size="icon"
                       className="mt-1 size-8 shrink-0 text-muted-foreground hover:text-text-warning"
                       onClick={() => removeStep(i)}
-                      disabled={readOnly}
+                      disabled={!canEdit}
                       aria-label={t("templates.removeStep")}
                     >
                       <Trash2 className="size-4" />
@@ -722,7 +725,7 @@ export function AlertTemplatesView({
               size="sm"
               className="mt-3 w-fit"
               onClick={addStep}
-              disabled={readOnly}
+              disabled={!canEdit}
             >
               <Plus className="size-4" />
               {t("templates.addStep")}
@@ -1046,7 +1049,7 @@ export function AlertTemplatesView({
               variant="destructive"
               type="button"
               onClick={confirmDelete}
-              disabled={readOnly}
+              disabled={!canDelete}
             >
               <Trash2 className="size-4" />
               {t("common.delete")}
