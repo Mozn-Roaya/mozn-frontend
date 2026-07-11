@@ -116,7 +116,14 @@ const STATUS_DOT: Record<string, string> = {
   offline: "bg-status-offline",
 };
 
-export function StationsTable({ page }: { page: StationsPage }) {
+export function StationsTable({
+  page,
+  initialStatus,
+}: {
+  page: StationsPage;
+  /** Status to pre-apply as the filter (from ?status= on the dashboard drill-down). */
+  initialStatus?: string;
+}) {
   const { locale } = useLocale();
   const t = useT();
   const router = useRouter();
@@ -137,7 +144,11 @@ export function StationsTable({ page }: { page: StationsPage }) {
     [page.groups],
   );
 
-  const [statuses, setStatuses] = React.useState<string[]>([]);
+  // Seed the status filter from the dashboard drill-down (?status=offline), but
+  // only if it's a real status this dataset knows about.
+  const [statuses, setStatuses] = React.useState<string[]>(
+    initialStatus && page.filters.some((f) => f.key === initialStatus) ? [initialStatus] : [],
+  );
   const [query, setQuery] = React.useState("");
   const [sort, setSort] = React.useState<SortState<SortKey>>({
     key: "status",

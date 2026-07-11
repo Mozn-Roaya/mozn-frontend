@@ -15,10 +15,10 @@ const STATUS_CARD: Record<
   StatusTone,
   { icon: LucideIcon; tone: StatTone; hintKey: string; href: string }
 > = {
-  online: { icon: Wifi, tone: "ok", hintKey: "dashboard.hint.reportingNow", href: "/stations" },
-  offline: { icon: WifiOff, tone: "offline", hintKey: "dashboard.hint.noSignal", href: "/stations" },
-  maintenance: { icon: Wrench, tone: "watch", hintKey: "dashboard.hint.scheduled", href: "/stations" },
-  anomaly: { icon: Activity, tone: "advisory", hintKey: "dashboard.hint.needsReview", href: "/active-alerts" },
+  online: { icon: Wifi, tone: "ok", hintKey: "dashboard.hint.reportingNow", href: "/stations?status=online" },
+  offline: { icon: WifiOff, tone: "offline", hintKey: "dashboard.hint.noSignal", href: "/stations?status=offline" },
+  maintenance: { icon: Wrench, tone: "watch", hintKey: "dashboard.hint.scheduled", href: "/stations?status=maintenance" },
+  anomaly: { icon: Activity, tone: "advisory", hintKey: "dashboard.hint.needsReview", href: "/stations?status=anomaly" },
   alert: { icon: BellRing, tone: "danger", hintKey: "dashboard.hint.openNow", href: "/alert-inbox" },
 };
 

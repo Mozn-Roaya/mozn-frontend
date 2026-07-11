@@ -5,8 +5,12 @@ import { AddStationDialog } from "@/features/stations/components/add-station-dia
 
 export const dynamic = "force-dynamic";
 
-export default async function StationsPageRoute() {
-  const page = await getStations();
+export default async function StationsPageRoute({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string }>;
+}) {
+  const [page, sp] = await Promise.all([getStations(), searchParams]);
 
   return (
     <div className="space-y-6">
@@ -22,7 +26,7 @@ export default async function StationsPageRoute() {
         <AddStationDialog regions={page.groups.map((g) => g.region)} />
       </PageHeading>
 
-      <StationsTable page={page} />
+      <StationsTable page={page} initialStatus={sp.status} />
     </div>
   );
 }
