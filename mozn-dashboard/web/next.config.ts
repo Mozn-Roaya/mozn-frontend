@@ -1,12 +1,11 @@
 import type { NextConfig } from "next";
 
-// Multi-Zones: the dashboard is a child zone mounted under /dashboard behind the
-// public app (see ../../mozn-public/frontend/next.config.ts `rewrites`). `basePath`
-// makes every page live at /dashboard/* and auto-prefixes all next/link, router,
-// and static (/dashboard/_next/*) URLs — so no per-link changes are needed.
-// It is re-exposed as NEXT_PUBLIC_BASE_PATH for the few raw client `fetch()`
-// calls that Next does NOT auto-prefix (basePath only rewrites Link/router/image).
-const BASE_PATH = "/dashboard";
+// The dashboard is deployed on its own subdomain (dashboard.mozn.org.ly), served
+// at the root — so no basePath. It is still re-exposed as NEXT_PUBLIC_BASE_PATH
+// (now "") for the few raw client `fetch()` calls that reference it; those resolve
+// to /api/... at the root. If it's ever mounted under a path again, set this back
+// to that path (e.g. "/dashboard") and everything auto-prefixes.
+const BASE_PATH = "";
 
 const nextConfig: NextConfig = {
   basePath: BASE_PATH,
