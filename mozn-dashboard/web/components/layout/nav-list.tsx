@@ -90,11 +90,14 @@ function NavRow({
  * the item set is scoped to the active role (Gov roles see a subset). */
 export function NavList({ onNavigate }: { onNavigate?: () => void }) {
   const t = useT();
-  const { isGov } = useRole();
+  const { isGov, can } = useRole();
 
   const groups = NAV_GROUPS.map((group) => ({
     ...group,
-    items: isGov ? group.items.filter((i) => i.gov) : group.items,
+    // Gov roles: the region-scoped subset (by the `gov` flag). Non-Gov roles:
+    // everything they hold the view permission for — so an `operator` doesn't see
+    // admin screens (Users/Settings) it lacks access to and would only 403 on.
+    items: group.items.filter((i) => (isGov ? i.gov : !i.permission || can(i.permission))),
   })).filter((group) => group.items.length > 0);
 
   return (

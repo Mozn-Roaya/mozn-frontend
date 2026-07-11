@@ -119,9 +119,9 @@ const EMPTY_DRAFT: Draft = {
   regionIds: [],
 };
 
-// Matches the backend's registerRequest (min 12) so the client blocks early
+// Matches the backend's registerRequest (min 8) so the client blocks early
 // instead of round-tripping a guaranteed 400.
-const MIN_PASSWORD = 12;
+const MIN_PASSWORD = 8;
 
 // Roles that can manage a region's stations/alerts (A4.1 sole-editor guard).
 const EDITOR_ROLES = new Set<UserRole>(["Super Admin", "Gov Editor"]);
@@ -184,6 +184,15 @@ export function UsersTable({
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [draft, setDraft] = React.useState<Draft>(EMPTY_DRAFT);
   const [showPassword, setShowPassword] = React.useState(false);
+  // Inline password validation: flag a too-short password once the field has been
+  // touched (blurred), so the box turns red with a hint instead of only erroring
+  // on submit.
+  const [passwordTouched, setPasswordTouched] = React.useState(false);
+  const passwordTooShort =
+    !editingId &&
+    passwordTouched &&
+    draft.password.length > 0 &&
+    draft.password.length < MIN_PASSWORD;
   const [saving, setSaving] = React.useState(false);
   const [sort, setSort] = React.useState<SortState<SortKey>>({ key: "lastActive", dir: "asc" });
   const onSort = (key: SortKey) => setSort((prev) => nextSort(prev, key));
@@ -202,6 +211,7 @@ export function UsersTable({
     setEditingId(null);
     setDraft(EMPTY_DRAFT);
     setShowPassword(false);
+    setPasswordTouched(false);
     setDialogOpen(true);
   };
 
@@ -227,6 +237,7 @@ export function UsersTable({
       regionIds: user.regionIds,
     });
     setShowPassword(false);
+    setPasswordTouched(false);
     setDialogOpen(true);
   };
 
@@ -750,11 +761,17 @@ export function UsersTable({
                   <Input
                     id="user-password"
                     type={showPassword ? "text" : "password"}
-                    className="ps-9 pe-10"
+                    className={cn(
+                      "ps-9 pe-10",
+                      passwordTooShort && "border-status-warning focus-visible:ring-status-warning/40",
+                    )}
                     value={draft.password}
                     onChange={(e) => setDraft((d) => ({ ...d, password: e.target.value }))}
+                    onBlur={() => setPasswordTouched(true)}
                     placeholder={t("users.passwordPlaceholder", { n: MIN_PASSWORD })}
                     autoComplete="new-password"
+                    aria-invalid={passwordTooShort}
+                    aria-describedby={passwordTooShort ? "user-password-error" : undefined}
                   />
                   <button
                     type="button"
@@ -766,6 +783,15 @@ export function UsersTable({
                     {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                   </button>
                 </div>
+                {passwordTooShort ? (
+                  <p
+                    id="user-password-error"
+                    className="flex items-center gap-1 text-xs text-text-warning"
+                  >
+                    <TriangleAlert className="size-3.5 shrink-0" aria-hidden />
+                    {t("users.toastPasswordMin", { n: MIN_PASSWORD })}
+                  </p>
+                ) : null}
               </div>
             )}
             <div className="grid gap-4 sm:grid-cols-2">

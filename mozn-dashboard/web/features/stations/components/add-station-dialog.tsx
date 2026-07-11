@@ -8,12 +8,13 @@ import { useT } from "@/components/providers/locale-provider";
 import { useRole } from "@/components/providers/role-provider";
 
 /** "Add station" action — navigates to the full-page form (A2.1).
- * Hidden for Gov roles, which have a read-only view of stations (G2). */
+ * Only shown to accounts that can actually create stations (Super Admin);
+ * hidden for Gov roles and operators, which lack stations.create. */
 export function AddStationDialog({ regions: _regions }: { regions: string[] }) {
   const t = useT();
-  const { isGov } = useRole();
+  const { can } = useRole();
 
-  if (isGov) return null;
+  if (!can("stations.create")) return null;
 
   return (
     <Button asChild>

@@ -10,8 +10,7 @@ interface RoleContextValue {
   name: string;
   email: string;
   role: UserRole;
-  setRole: (role: UserRole) => void;
-  /** True for a region-scoped account (from /api/me), not the previewed role. */
+  /** True for a region-scoped account (from /api/me). */
   isGov: boolean;
   /** True when the account holds no write permission at all (from /api/me). */
   readOnly: boolean;
@@ -28,7 +27,6 @@ const RoleContext = React.createContext<RoleContextValue>({
   name: "",
   email: "",
   role: "Gov Viewer",
-  setRole: () => {},
   isGov: true,
   readOnly: true,
   assignedRegion: "",
@@ -37,12 +35,10 @@ const RoleContext = React.createContext<RoleContextValue>({
 });
 
 /**
- * Holds the signed-in identity + active role. Seeded from the real backend
- * session (`/api/me`, resolved server-side in the dashboard layout). The role
- * switcher stays as a client-side *preview* of the role-scoped experience — the
- * backend remains the source of truth and enforces permissions on every call,
- * so previewing a higher role just surfaces 403s on write, it doesn't grant
- * access.
+ * Holds the signed-in identity + role, seeded from the real backend session
+ * (`/api/me`, resolved server-side in the dashboard layout). Everything here
+ * reflects the actual account: whoever logs in sees exactly what their role
+ * grants, and the backend enforces the same permissions on every call.
  */
 export function RoleProvider({
   initialUser,
@@ -51,17 +47,11 @@ export function RoleProvider({
   initialUser: SessionUser;
   children: React.ReactNode;
 }) {
-  const [role, setRole] = React.useState<UserRole>(initialUser.role);
-
   const value = React.useMemo<RoleContextValue>(
     () => ({
       name: initialUser.name,
       email: initialUser.email,
-      role,
-      setRole,
-      // Gating reflects the REAL signed-in account (its /api/me permissions), not
-      // the previewed role — "whoever logs in sees exactly what they have". The
-      // role switcher stays a cosmetic label preview; the backend enforces perms.
+      role: initialUser.role,
       isGov: initialUser.isGov,
       readOnly: initialUser.readOnly,
       assignedRegion: initialUser.assignedRegion,
@@ -69,9 +59,9 @@ export function RoleProvider({
       can: (permission: string) => initialUser.permissions.includes(permission),
     }),
     [
-      role,
       initialUser.name,
       initialUser.email,
+      initialUser.role,
       initialUser.assignedRegion,
       initialUser.isGov,
       initialUser.readOnly,

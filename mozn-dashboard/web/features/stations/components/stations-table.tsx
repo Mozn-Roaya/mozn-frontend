@@ -120,8 +120,12 @@ export function StationsTable({ page }: { page: StationsPage }) {
   const t = useT();
   const td = useTD();
   const router = useRouter();
-  // Gov roles get a read-only view (G2): no selection, bulk actions, or edits.
-  const { isGov: readOnly } = useRole();
+  // Station actions follow the account's real permissions. `readOnly` (no
+  // selection / bulk bar / edit) means it can't update stations; create + delete
+  // are gated separately. Region-scoped (Gov) accounts also only see their region.
+  const { isGov, assignedRegion, can } = useRole();
+  const canDelete = can("stations.delete");
+  const readOnly = !can("stations.update");
   const nameOf = React.useCallback(
     (r: Row) => (locale === "ar" ? r.nameAr : r.name),
     [locale],
@@ -176,6 +180,8 @@ export function StationsTable({ page }: { page: StationsPage }) {
   const rows = React.useMemo(() => {
     const q = query.trim().toLowerCase();
     const filtered = allRows.filter((r) => {
+      // Region-scoped (Gov) accounts only see stations in their assigned region.
+      const matchesRegion = !isGov || !assignedRegion || r.region === assignedRegion;
       const matchesStatus =
         statuses.length === 0 || statuses.includes(r.status);
       const matchesQuery =
@@ -183,7 +189,7 @@ export function StationsTable({ page }: { page: StationsPage }) {
         r.name.toLowerCase().includes(q) ||
         r.region.toLowerCase().includes(q) ||
         r.nameAr.includes(query.trim());
-      return matchesStatus && matchesQuery;
+      return matchesRegion && matchesStatus && matchesQuery;
     });
 
     const dir = sort.dir === "asc" ? 1 : -1;
@@ -201,7 +207,7 @@ export function StationsTable({ page }: { page: StationsPage }) {
           );
       }
     });
-  }, [allRows, statuses, query, sort, nameOf]);
+  }, [allRows, statuses, query, sort, nameOf, isGov, assignedRegion]);
 
   // Client-side pagination. Selection + bulk actions still span the whole
   // filtered set; only the rendered rows are sliced to the current page.
@@ -459,14 +465,16 @@ export function StationsTable({ page }: { page: StationsPage }) {
                                 <Wrench className="size-4" />
                                 {t("stations.setMaintenance")}
                               </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => setDeleteRow(row)}
-                                className="text-text-warning focus:bg-status-warning/10 focus:text-text-warning"
-                              >
-                                <Trash2 className="size-4" />
-                                {t("stations.deleteStation")}
-                              </DropdownMenuItem>
                             </>
+                          ) : null}
+                          {canDelete ? (
+                            <DropdownMenuItem
+                              onClick={() => setDeleteRow(row)}
+                              className="text-text-warning focus:bg-status-warning/10 focus:text-text-warning"
+                            >
+                              <Trash2 className="size-4" />
+                              {t("stations.deleteStation")}
+                            </DropdownMenuItem>
                           ) : null}
                         </DropdownMenuContent>
                       </DropdownMenu>

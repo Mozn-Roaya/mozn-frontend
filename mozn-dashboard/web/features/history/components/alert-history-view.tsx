@@ -30,6 +30,7 @@ import { OutcomeBadge, SeverityBadge } from "@/components/common/status-badges";
 import { downloadCsv } from "@/lib/export-csv";
 import { toast } from "@/components/ui/toaster";
 import { useLocale } from "@/components/providers/locale-provider";
+import { useRole } from "@/components/providers/role-provider";
 import { usePreferences } from "@/features/settings/use-preferences";
 import { cn } from "@/lib/utils";
 import type { Locale } from "@/lib/i18n";
@@ -73,6 +74,8 @@ const RANGE_KEYS = ["24h", "7d", "30d", "90d"] as const;
 
 export function AlertHistoryView({ page, range }: { page: AlertHistoryPage; range: string }) {
   const { locale, t, td } = useLocale();
+  // Region-scoped (Gov) accounts only see their own region's alert history.
+  const { isGov, assignedRegion } = useRole();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -134,14 +137,17 @@ export function AlertHistoryView({ page, range }: { page: AlertHistoryPage; rang
   const base = React.useMemo(() => {
     const q = query.trim().toLowerCase();
     return page.rows.filter((r) => {
+      // Hard region scope for Gov accounts (overrides the facet); Super Admin
+      // uses the region facet freely.
+      const inScope = !isGov || !assignedRegion || r.region === assignedRegion;
       const okRegion = regions.length === 0 || regions.includes(r.region);
       const okType =
         types.length === 0 || types.some((tp) => alertMatchesType(r.alert, tp));
       const okQuery =
         !q || `${r.alert} ${t("region." + r.region)}`.toLowerCase().includes(q);
-      return okRegion && okType && okQuery;
+      return inScope && okRegion && okType && okQuery;
     });
-  }, [page.rows, regions, types, query, t]);
+  }, [page.rows, regions, types, query, t, isGov, assignedRegion]);
 
   const rows = React.useMemo(() => {
     const filtered =
