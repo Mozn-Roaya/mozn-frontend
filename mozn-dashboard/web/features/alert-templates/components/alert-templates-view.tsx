@@ -344,6 +344,16 @@ export function AlertTemplatesView({
     setSteps(active.steps);
   }
 
+  // Follow a live language switch: re-default the preview variant to match the
+  // new locale (same render-time sync pattern as draftForId above). Without this
+  // the useState initializer only runs on mount, so toggling the language while
+  // the page is open left the preview stuck on the old language until navigation.
+  const [previewForLocale, setPreviewForLocale] = React.useState(locale);
+  if (previewForLocale !== locale) {
+    setPreviewForLocale(locale);
+    setPreviewKey(locale === "ar" ? "arDay" : "enDay");
+  }
+
   const done = doneCount(draft);
   const ready = done === VERSION_KEYS.length;
   const versionsDirty = VERSION_KEYS.some((k) => draft[k] !== active.versions[k]);
@@ -491,7 +501,7 @@ export function AlertTemplatesView({
                       <TIcon className="size-4" aria-hidden />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium text-foreground">
+                      <span className="block text-sm font-medium leading-tight text-foreground line-clamp-2">
                         {templateName(tp)}
                       </span>
                       <span

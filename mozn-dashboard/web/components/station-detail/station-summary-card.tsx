@@ -470,7 +470,9 @@ export function StationSummaryCard({
       alive = false;
     };
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [stationId, detailProp.availability]);
+    // locale is a dep so a language toggle refetches — the reading's alert
+    // description + rain/wind notes are localized server-side by the locale cookie.
+  }, [stationId, detailProp.availability, locale]);
 
   // A live station whose first reading hasn't resolved yet. Derived (not effect
   // state) so switching stations flips it back to loading with no flash frame.

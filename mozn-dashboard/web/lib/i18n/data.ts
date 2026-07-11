@@ -80,6 +80,7 @@ export const dataDict: Record<string, string> = {
   // Tier units
   "mm/hr": "ملم/س",
   "km/h": "كم/س",
+  "hPa": "هكتوباسكال",
   "°C": "°م",
   "mm": "ملم",
   // Change-history entries (relative time)

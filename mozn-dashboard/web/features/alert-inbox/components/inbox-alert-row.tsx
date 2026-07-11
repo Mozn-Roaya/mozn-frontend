@@ -150,7 +150,7 @@ export function InboxAlertRow({
           </p>
           <p className="mt-0.5 truncate text-xs text-muted-foreground">
             {td(item.title)}
-            {ctx.region ? ` · ${ctx.region}` : ""}
+            {ctx.region ? ` · ${t("region." + ctx.region)}` : ""}
           </p>
         </TableCell>
 
@@ -171,12 +171,15 @@ export function InboxAlertRow({
           )}
         </TableCell>
 
-        {/* Waiting + SLA */}
-        <TableCell className="whitespace-nowrap">
-          <span className="text-sm text-foreground"><RelativeTime iso={item.issuedAt} /></span>
-          <span className={cn("ms-2 text-xs", SLA_TEXT[item.sla.tone])}>
-            {td(item.sla.label)}
-          </span>
+        {/* Waiting + SLA — stacked so the (longer) Arabic time + SLA words don't
+            collide/clip on one line; each line stays short. */}
+        <TableCell className="whitespace-nowrap align-middle">
+          <div className="flex flex-col leading-tight">
+            <span className="text-sm text-foreground"><RelativeTime iso={item.issuedAt} /></span>
+            <span className={cn("text-xs", SLA_TEXT[item.sla.tone])}>
+              {td(item.sla.label)}
+            </span>
+          </div>
         </TableCell>
 
         {/* Actions */}

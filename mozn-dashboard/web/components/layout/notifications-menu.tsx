@@ -37,6 +37,15 @@ const TONE: Record<string, { icon: LucideIcon; className: string }> = {
   yellow: { icon: Info, className: "text-text-link" },
 };
 
+// Alert colour → hazard-word dict key (matches the map pins' vocabulary).
+// n.severity is red/orange/yellow, so `severity.<colour>` had no dict entry and
+// rendered the raw key ("severity.red"). pin.* has exactly these three levels.
+const SEVERITY_LABEL_KEY: Record<string, string> = {
+  red: "pin.severe",
+  orange: "pin.warning",
+  yellow: "pin.watch",
+};
+
 export function NotificationsMenu() {
   const t = useT();
   const td = useTD();
@@ -92,7 +101,7 @@ export function NotificationsMenu() {
               {items.map((n) => {
                 const tone = TONE[n.severity] ?? TONE.yellow;
                 const Icon = tone.icon;
-                const title = `${t("severity." + n.severity)} · ${td(paramLabel(n.parameter))}`;
+                const title = `${t(SEVERITY_LABEL_KEY[n.severity] ?? "pin.watch")} · ${td(paramLabel(n.parameter))}`;
                 const desc = locale === "ar" && n.messageAr ? n.messageAr : n.message;
                 return (
                   <li key={`${n.type}:${n.id}`}>

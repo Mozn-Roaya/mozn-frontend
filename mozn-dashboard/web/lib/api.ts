@@ -1323,6 +1323,19 @@ function compass(deg: number): string {
   return COMPASS_16[Math.round(((deg % 360) / 22.5)) % 16];
 }
 
+// Arabic compass letters (ش=N، ق=E، ج=S، غ=W). The 16-point English code maps
+// letter-for-letter (e.g. WNW → غ ش غ), so no per-code dict entries (and no
+// single-letter dataDict keys that could hijack unrelated td() lookups).
+const COMPASS_AR: Record<string, string> = { N: "ش", E: "ق", S: "ج", W: "غ" };
+function compassLocalized(deg: number, locale: Locale): string {
+  const code = compass(deg);
+  if (locale !== "ar") return code;
+  return code
+    .split("")
+    .map((c) => COMPASS_AR[c] ?? c)
+    .join(" ");
+}
+
 /**
  * Latest reading for a station, shaped as the station-summary card's weather
  * fields. Uses the authed, region-scoped, live /api/readings (page_size=1 ⇒ the
@@ -1368,18 +1381,31 @@ export async function getLatestReading(stationId: string): Promise<Partial<Stati
   const feels = r.heatindex_c ?? r.windchill_c ?? r.temp_c;
   if (feels != null) out.feelsLike = Math.round(feels);
   if (r.rain_rate_mm != null) {
+    // Note is a dynamic composed string, so localize by locale here (the card
+    // refetches on a language toggle); the unit + direction are localized on the
+    // client via td().
     out.rainfall = {
       value: String(r.rain_rate_mm),
       unit: "mm/hr",
-      note: r.rain_daily_mm != null ? `${r.rain_daily_mm} mm today` : "",
+      note:
+        r.rain_daily_mm != null
+          ? locale === "ar"
+            ? `${r.rain_daily_mm} ملم اليوم`
+            : `${r.rain_daily_mm} mm today`
+          : "",
     };
   }
   if (r.wind_speed_kmh != null) {
     out.wind = {
       value: String(Math.round(r.wind_speed_kmh)),
       unit: "km/h",
-      note: r.wind_gust_kmh != null ? `Gusts ${Math.round(r.wind_gust_kmh)} km/h` : "",
-      direction: r.wind_dir != null ? compass(r.wind_dir) : "",
+      note:
+        r.wind_gust_kmh != null
+          ? locale === "ar"
+            ? `هبّات ${Math.round(r.wind_gust_kmh)} كم/س`
+            : `Gusts ${Math.round(r.wind_gust_kmh)} km/h`
+          : "",
+      direction: r.wind_dir != null ? compassLocalized(r.wind_dir, locale) : "",
     };
   }
   if (r.humidity != null) out.humidity = { value: String(Math.round(r.humidity)), unit: "%", note: "" };
