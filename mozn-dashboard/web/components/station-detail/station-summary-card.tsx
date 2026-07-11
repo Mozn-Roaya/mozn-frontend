@@ -535,20 +535,11 @@ export function StationSummaryCard({
             {t("dashboard.station.maintenanceDesc")}
           </p>
         </Panel>
-      ) : loadingWeather ? (
-        <WeatherSkeleton />
-      ) : detail.temp == null ? (
-        <EmptyState icon={CloudOff} message={t("dashboard.station.noData")} />
       ) : (
         <>
-          <TemperatureCard
-            temp={detail.temp}
-            feelsLike={detail.feelsLike ?? 0}
-            high={detail.high ?? 0}
-            low={detail.low ?? 0}
-            unit={tempUnit}
-          />
-
+          {/* Alert always shows first when present — even if there's no current
+              reading — so a coloured (alerting) pin always surfaces its alert,
+              including a still-pending (unconfirmed) one. */}
           {detail.alert ? (
             <AlertCard
               title={detail.alert.title}
@@ -560,36 +551,54 @@ export function StationSummaryCard({
             />
           ) : null}
 
-          <div className="grid grid-cols-2 gap-4">
-            {detail.rainfall ? (
-              <MetricCard icon={CloudRain} label={t("dashboard.station.rainfall")} metric={detail.rainfall} />
-            ) : null}
-            {detail.wind ? (
-              <MetricCard
-                icon={Wind}
-                label={t("dashboard.station.wind")}
-                metric={convertWindMetric(detail.wind, windUnit)}
-                direction={detail.wind.direction}
+          {loadingWeather ? (
+            <WeatherSkeleton />
+          ) : detail.temp == null ? (
+            detail.alert ? null : (
+              <EmptyState icon={CloudOff} message={t("dashboard.station.noData")} />
+            )
+          ) : (
+            <>
+              <TemperatureCard
+                temp={detail.temp}
+                feelsLike={detail.feelsLike ?? 0}
+                high={detail.high ?? 0}
+                low={detail.low ?? 0}
+                unit={tempUnit}
               />
-            ) : null}
-            {detail.humidity ? (
-              <MetricCard icon={Droplets} label={t("dashboard.station.humidity")} metric={detail.humidity} />
-            ) : null}
-            {detail.pressure ? (
-              <MetricCard icon={Gauge} label={t("dashboard.station.pressure")} metric={detail.pressure} />
-            ) : null}
-          </div>
 
-          {detail.forecast && detail.forecast.length > 0 ? (
-            <ForecastCard
-              forecast={detail.forecast.map((d) => ({
-                ...d,
-                low: toTemp(d.low, tempUnit),
-                high: toTemp(d.high, tempUnit),
-              }))}
-              subtitle={t(`region.${detail.region}`)}
-            />
-          ) : null}
+              <div className="grid grid-cols-2 gap-4">
+                {detail.rainfall ? (
+                  <MetricCard icon={CloudRain} label={t("dashboard.station.rainfall")} metric={detail.rainfall} />
+                ) : null}
+                {detail.wind ? (
+                  <MetricCard
+                    icon={Wind}
+                    label={t("dashboard.station.wind")}
+                    metric={convertWindMetric(detail.wind, windUnit)}
+                    direction={detail.wind.direction}
+                  />
+                ) : null}
+                {detail.humidity ? (
+                  <MetricCard icon={Droplets} label={t("dashboard.station.humidity")} metric={detail.humidity} />
+                ) : null}
+                {detail.pressure ? (
+                  <MetricCard icon={Gauge} label={t("dashboard.station.pressure")} metric={detail.pressure} />
+                ) : null}
+              </div>
+
+              {detail.forecast && detail.forecast.length > 0 ? (
+                <ForecastCard
+                  forecast={detail.forecast.map((d) => ({
+                    ...d,
+                    low: toTemp(d.low, tempUnit),
+                    high: toTemp(d.high, tempUnit),
+                  }))}
+                  subtitle={t(`region.${detail.region}`)}
+                />
+              ) : null}
+            </>
+          )}
         </>
       )}
     </div>

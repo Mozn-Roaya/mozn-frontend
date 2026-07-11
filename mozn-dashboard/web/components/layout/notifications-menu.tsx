@@ -24,6 +24,7 @@ import { RelativeTime } from "@/components/common/relative-time";
 import { useLocale, useT, useTD } from "@/components/providers/locale-provider";
 import { paramLabel } from "@/lib/mappers";
 import {
+  clearNotifs,
   markAllNotifsRead,
   markNotifRead,
   useAlertNotifs,
@@ -137,8 +138,17 @@ export function NotificationsMenu() {
           )}
         </ScrollArea>
 
-        <div className="border-t border-border-subtle p-2">
-          <Button asChild variant="ghost" size="sm" className="w-full justify-center">
+        <div className="flex items-center justify-between gap-2 border-t border-border-subtle p-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={clearNotifs}
+            disabled={items.length === 0}
+            className="text-muted-foreground"
+          >
+            {t("notif.clearAll")}
+          </Button>
+          <Button asChild variant="ghost" size="sm">
             <Link href="/alert-inbox" onClick={() => setOpen(false)}>
               {t("notif.viewAll")}
             </Link>

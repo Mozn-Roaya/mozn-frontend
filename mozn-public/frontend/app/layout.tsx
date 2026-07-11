@@ -23,7 +23,7 @@ const cairo = Cairo({
 });
 
 export const metadata: Metadata = {
-  title: "Mozn — Early Warning System",
+  title: "Mozn - Early Warning System",
   description: "Mozn design system and early warning dashboard.",
   // Favicon is served from the App Router file convention `app/icon.svg` (the
   // navy MOZN tile), kept identical to the admin dashboard so both surfaces

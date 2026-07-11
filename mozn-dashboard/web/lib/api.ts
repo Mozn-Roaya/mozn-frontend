@@ -1297,15 +1297,41 @@ function compass(deg: number): string {
  * newest row). Every measurement is optional server-side, so we only set the
  * fields that are present. Returns null when the station has no readings.
  */
+const ALERT_SEVERITY_RANK: Record<string, number> = { red: 3, orange: 2, yellow: 1 };
+
 export async function getLatestReading(stationId: string): Promise<Partial<StationDetail> | null> {
   const locale = await getServerLocale();
-  const rows = await backendData<BackendReading[]>(
-    `/api/readings?station_id=${encodeURIComponent(stationId)}&page_size=1`,
-  );
-  const r = rows[0];
-  if (!r) return null;
+  const [rows, alerts] = await Promise.all([
+    backendData<BackendReading[]>(
+      `/api/readings?station_id=${encodeURIComponent(stationId)}&page_size=1`,
+    ).catch(() => [] as BackendReading[]),
+    // Active alerts for this station — includes PENDING (not-yet-confirmed) ones,
+    // so the admin sees an internal flag the public map deliberately wouldn't.
+    backendData<BackendAlert[]>(
+      `/api/alerts?station_id=${encodeURIComponent(stationId)}&is_active=true&page_size=50`,
+    ).catch(() => [] as BackendAlert[]),
+  ]);
 
-  const out: Partial<StationDetail> = { updated: relativeTime(r.time, locale) };
+  const r = rows[0];
+  // Highest-severity active alert → surface it on the summary card so a coloured
+  // pin always has its alert to show (was previously never wired in).
+  const top = [...alerts].sort(
+    (a, b) => (ALERT_SEVERITY_RANK[b.severity] ?? 0) - (ALERT_SEVERITY_RANK[a.severity] ?? 0),
+  )[0];
+
+  if (!r && !top) return null;
+
+  const out: Partial<StationDetail> = {};
+  if (top) {
+    out.alert = {
+      title: paramLabel(top.parameter),
+      description: locale === "ar" ? top.message_ar : top.message,
+      actions: (locale === "ar" ? top.guidance_steps_ar : top.guidance_steps_en) ?? [],
+    };
+  }
+  if (!r) return out;
+
+  out.updated = relativeTime(r.time, locale);
   if (r.temp_c != null) out.temp = Math.round(r.temp_c);
   const feels = r.heatindex_c ?? r.windchill_c ?? r.temp_c;
   if (feels != null) out.feelsLike = Math.round(feels);

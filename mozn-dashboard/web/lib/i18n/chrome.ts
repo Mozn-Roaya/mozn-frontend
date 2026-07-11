@@ -66,6 +66,7 @@ export const chrome: Record<string, Entry> = {
   "notif.markAllRead": { en: "Mark all read", ar: "تعليم الكل كمقروء" },
   "notif.caughtUp": { en: "You're all caught up.", ar: "لا توجد تنبيهات جديدة." },
   "notif.viewAll": { en: "View all in Alert Inbox", ar: "عرض الكل في صندوق التنبيهات" },
+  "notif.clearAll": { en: "Clear all", ar: "مسح الكل" },
   "notif.unread": { en: "Unread", ar: "غير مقروءة" },
   // Real-time alert toast (SSE)
   "events.newAlert": { en: "New alert: {param}", ar: "تنبيه جديد: {param}" },

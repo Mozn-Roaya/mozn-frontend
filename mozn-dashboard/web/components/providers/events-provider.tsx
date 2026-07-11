@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "@/components/ui/toaster";
 import { useT, useTD } from "@/components/providers/locale-provider";
 import { paramLabel } from "@/lib/mappers";
-import { pushAlertNotif } from "@/components/layout/notifications-store";
+import { hydrateNotifs, pushAlertNotif } from "@/components/layout/notifications-store";
 
 const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
@@ -51,6 +51,9 @@ export function EventsProvider() {
   });
 
   React.useEffect(() => {
+    // Restore persisted notifications so the bell survives reloads/navigation.
+    hydrateNotifs();
+
     const scheduleRefresh = () => {
       if (refreshTimer.current) return;
       refreshTimer.current = setTimeout(() => {
