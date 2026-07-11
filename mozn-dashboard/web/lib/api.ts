@@ -140,7 +140,10 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
   const trendFrom = new Date(Date.now() - 7 * 86_400_000).toISOString();
 
   // Supplementary context (best-effort; region-scoped server-side for gov users).
-  const [regions, municipalities, stations, users, activeAlerts, audit, trendAlerts] = await Promise.all([
+  // The primary stats source is already decided by useGov, so fetch it in the
+  // same batch instead of a third serial phase. It carries NO .catch (a failure
+  // should surface as a page error, matching the original per-branch awaits).
+  const [regions, municipalities, stations, users, activeAlerts, audit, trendAlerts, statsRaw] = await Promise.all([
     loadRegions(),
     loadMunicipalities(),
     loadStationsAll(),
@@ -148,6 +151,9 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
     backendData<BackendAlert[]>("/api/alerts?is_active=true&page_size=500").catch(() => [] as BackendAlert[]),
     backendData<BackendAuditLog[]>("/api/audit-logs?page_size=20").catch(() => [] as BackendAuditLog[]),
     backendData<BackendAlert[]>(`/api/alerts?from=${trendFrom}&page_size=1000`).catch(() => [] as BackendAlert[]),
+    useGov
+      ? backendData<BackendGovDashboardStats>("/api/gov/dashboard")
+      : backendData<BackendDashboardStats>("/api/dashboard/stats"),
   ]);
 
   const muniRegion = municipalityRegionName(municipalities, regions);
@@ -174,7 +180,8 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
   }
   let norm: NormStats;
   if (useGov) {
-    const g = await backendData<BackendGovDashboardStats>("/api/gov/dashboard");
+    // Fetched above in the batch; useGov gated which endpoint was called.
+    const g = statsRaw as BackendGovDashboardStats;
     const health: BackendStationHealth[] = stations.map((s) => ({
       id: s.id,
       name: s.name,
@@ -197,8 +204,8 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
       health,
     };
   } else {
-    // Failure here should surface as a page error (primary admin source).
-    const stats = await backendData<BackendDashboardStats>("/api/dashboard/stats");
+    // Fetched above in the batch (no .catch → a failure surfaces as a page error).
+    const stats = statsRaw as BackendDashboardStats;
     norm = {
       totalStations: stats.total_stations,
       activeStations: stats.active_stations,
@@ -349,8 +356,11 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
 
 export async function getStations(): Promise<StationsPage> {
   const locale = await getServerLocale();
-  const { data: stations, meta } = await backendFetch<BackendStation[]>("/api/stations?page_size=1000");
-  const [regions, municipalities] = await Promise.all([loadRegions(), loadMunicipalities()]);
+  const [{ data: stations, meta }, regions, municipalities] = await Promise.all([
+    backendFetch<BackendStation[]>("/api/stations?page_size=1000"),
+    loadRegions(),
+    loadMunicipalities(),
+  ]);
   const muniRegion = municipalityRegionName(municipalities, regions);
 
   const rows: (StationRow & { region: string })[] = stations.map((s) => ({
@@ -408,8 +418,8 @@ const SLA_SECONDS = 120; // 2-minute triage SLA (design)
 
 export async function getAlertInbox(): Promise<AlertInboxPage> {
   const locale = await getServerLocale();
-  const alerts = await backendData<BackendAlert[]>("/api/alerts?status=pending&is_active=true&page_size=200");
-  const [regions, municipalities, stations] = await Promise.all([
+  const [alerts, regions, municipalities, stations] = await Promise.all([
+    backendData<BackendAlert[]>("/api/alerts?status=pending&is_active=true&page_size=200"),
     loadRegions(),
     loadMunicipalities(),
     loadStationsAll(),
@@ -617,8 +627,8 @@ export async function getAlertHistory(params?: { range?: string }): Promise<Aler
   const hours = HISTORY_RANGE_HOURS[params?.range ?? "7d"] ?? 168;
   const from = new Date(Date.now() - hours * 3_600_000).toISOString();
   const qs = new URLSearchParams({ page_size: "500", from });
-  const alerts = await backendData<BackendAlert[]>(`/api/alerts?${qs.toString()}`);
-  const [regions, municipalities, stations] = await Promise.all([
+  const [alerts, regions, municipalities, stations] = await Promise.all([
+    backendData<BackendAlert[]>(`/api/alerts?${qs.toString()}`),
     loadRegions(),
     loadMunicipalities(),
     loadStationsAll(),
@@ -717,8 +727,10 @@ function dayLabel(iso: string, now: number = Date.now()): string {
 
 export async function getActivityLog(): Promise<ActivityLogPage> {
   const locale = await getServerLocale();
-  const logs = await backendData<BackendAuditLog[]>("/api/audit-logs?page_size=200");
-  const users = await loadUsersAll();
+  const [logs, users] = await Promise.all([
+    backendData<BackendAuditLog[]>("/api/audit-logs?page_size=200"),
+    loadUsersAll(),
+  ]);
   const users_ = userNameMap(users);
 
   const meaningful = logs.filter((l) => l.action !== "view");
@@ -834,8 +846,8 @@ export async function getSettings(): Promise<SettingsPage> {
 
 export async function getActiveAlerts(): Promise<ManagedAlert[]> {
   const locale = await getServerLocale();
-  const alerts = await backendData<BackendAlert[]>("/api/alerts?page_size=200");
-  const [regions, municipalities, stations] = await Promise.all([
+  const [alerts, regions, municipalities, stations] = await Promise.all([
+    backendData<BackendAlert[]>("/api/alerts?page_size=200"),
     loadRegions(),
     loadMunicipalities(),
     loadStationsAll(),

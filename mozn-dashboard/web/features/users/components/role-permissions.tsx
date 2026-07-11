@@ -92,19 +92,23 @@ export function RolePermissions({ matrix }: { matrix: RoleMatrix }) {
   const save = async () => {
     setSaving(true);
     try {
-      const failures: string[] = [];
-      for (const roleId of changedRoleIds) {
-        const role = matrix.roles.find((r) => r.id === roleId);
-        const res = await fetch(`${BASE}/api/roles/${roleId}/permissions`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ permission_ids: [...(grants[roleId] ?? [])] }),
-        });
-        if (!res.ok) {
-          const json = (await res.json().catch(() => ({}))) as { error?: string };
-          failures.push(`${role?.label ?? roleId}: ${json.error ?? t("roles.saveFailed")}`);
-        }
-      }
+      // Independent per-role writes — run them in parallel (matching the other
+      // bulk actions, e.g. users-table / thresholds) instead of one sequential
+      // round-trip per changed role.
+      const results = await Promise.all(
+        changedRoleIds.map(async (roleId) => {
+          const role = matrix.roles.find((r) => r.id === roleId);
+          const res = await fetch(`${BASE}/api/roles/${roleId}/permissions`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ permission_ids: [...(grants[roleId] ?? [])] }),
+          }).catch(() => null);
+          if (res && res.ok) return null;
+          const json = res ? ((await res.json().catch(() => ({}))) as { error?: string }) : {};
+          return `${role?.label ?? roleId}: ${json.error ?? t("roles.saveFailed")}`;
+        }),
+      );
+      const failures = results.filter((x): x is string => x !== null);
       toast(failures.length ? failures[0] : t("roles.saved"), failures.length ? "info" : "success");
       router.refresh();
     } finally {

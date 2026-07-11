@@ -55,11 +55,15 @@ export function hydrateNotifs() {
   }
 }
 
-export function pushAlertNotif(n: Omit<AlertNotif, "read">) {
-  if (notifs.some((x) => x.id === n.id && x.type === n.type)) return; // dedup
+/** Adds a notification; dedupes by alert id ACROSS the lifecycle so one alert
+ *  going created → confirmed doesn't produce two bell entries. Returns whether it
+ *  was actually added (the caller toasts only then, avoiding a double toast). */
+export function pushAlertNotif(n: Omit<AlertNotif, "read">): boolean {
+  if (notifs.some((x) => x.id === n.id)) return false; // dedup by alert id
   notifs = [{ ...n, read: false }, ...notifs].slice(0, CAP);
   persist();
   emit();
+  return true;
 }
 
 export function markAllNotifsRead() {

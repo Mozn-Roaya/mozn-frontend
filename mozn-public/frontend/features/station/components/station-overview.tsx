@@ -46,7 +46,13 @@ export function StationOverview({
   const t = getDict(lang);
   const counts = station.active_alerts ?? { total: 0, yellow: 0, orange: 0, red: 0 };
   const forecastAlerts = station.forecast_alerts ?? [];
-  const primaryAlert = alerts[0];
+  // Pick the highest-severity alert (the list arrives newest-first), so the
+  // warning banner's severity/text agrees with the highest-severity-driven map
+  // pin. Sort is stable, so ties keep the newest-first order.
+  const sevRank: Record<string, number> = { red: 3, orange: 2, yellow: 1 };
+  const primaryAlert = [...alerts].sort(
+    (a, b) => (sevRank[b.severity] ?? 0) - (sevRank[a.severity] ?? 0),
+  )[0];
   const hasAlert =
     !!primaryAlert ||
     counts.red > 0 ||
@@ -137,7 +143,7 @@ export function StationOverview({
         <WeatherMetric
           type="rainfall"
           title={t.rainfall}
-          value={reading ? reading.rain_rate_mm.toFixed(1) : "—"}
+          value={reading && Number.isFinite(reading.rain_rate_mm) ? reading.rain_rate_mm.toFixed(1) : "—"}
           unit="mm/hr"
           description={
             reading
@@ -149,7 +155,7 @@ export function StationOverview({
         <WeatherMetric
           type="wind"
           title={t.windSpeed}
-          value={reading ? Math.round(reading.wind_speed_kmh) : "—"}
+          value={reading && Number.isFinite(reading.wind_speed_kmh) ? Math.round(reading.wind_speed_kmh) : "—"}
           unit="km/h"
           description={
             reading
@@ -163,7 +169,7 @@ export function StationOverview({
         <WeatherMetric
           type="humidity"
           title={t.humidity}
-          value={reading ? Math.round(reading.humidity) : "—"}
+          value={reading && Number.isFinite(reading.humidity) ? Math.round(reading.humidity) : "—"}
           unit="%"
           description={
             reading ? humidityDescription(reading.humidity, t) : t.noReading
@@ -173,7 +179,7 @@ export function StationOverview({
         <WeatherMetric
           type="pressure"
           title={t.pressure}
-          value={reading ? Math.round(reading.pressure_hpa) : "—"}
+          value={reading && Number.isFinite(reading.pressure_hpa) ? Math.round(reading.pressure_hpa) : "—"}
           unit="hPa"
           description={
             reading ? pressureDescription(reading.pressure_hpa, t) : t.noReading

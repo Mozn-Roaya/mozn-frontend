@@ -226,7 +226,7 @@ export function MetricThresholdsEditor({
     const warnTier = m?.tiers.find((tr) => tr.name.toLowerCase() === "warning");
     const regionId = m?.regionId ?? "";
     const param = warnTier?.parameter ?? "";
-    const warnValue = m ? values[m.metric]?.warning : undefined;
+    const warnValue = m ? values[vkey(m)]?.warning : undefined;
     if (!regionId || !param || warnValue == null || !Number.isFinite(warnValue)) {
       /* eslint-disable-next-line react-hooks/set-state-in-effect -- reset when inputs are incomplete */
       setFooterImpact(null);

@@ -62,40 +62,70 @@ export function EventsProvider() {
       }, 800);
     };
 
-    const es = new EventSource(`${BASE}/api/events`);
-    es.onmessage = (ev) => {
-      let msg: AlertEvent;
-      try {
-        msg = JSON.parse(ev.data);
-      } catch {
-        return;
-      }
-      if (!msg?.type?.startsWith("alert.")) return;
+    let es: EventSource | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let retries = 0;
+    let stopped = false; // set on unmount so a pending reconnect is cancelled
 
-      if (msg.type === "alert.created" || msg.type === "alert.confirmed") {
-        const { t: tt, td: ttd } = cbRef.current;
-        const label = ttd(paramLabel(msg.data.parameter));
-        toast(tt("events.newAlert", { param: label }), "info");
-        pushAlertNotif({
-          id: msg.data.id,
-          type: msg.type,
-          severity: msg.data.severity,
-          parameter: msg.data.parameter,
-          message: msg.data.message,
-          messageAr: msg.data.message_ar,
-          issuedAt: msg.data.issued_at,
-        });
-      }
-      // Any alert event (create/confirm/resolve/update) can change the lists +
-      // badge counts on the open screen — pull fresh server data.
-      scheduleRefresh();
+    const connect = () => {
+      es = new EventSource(`${BASE}/api/events`);
+
+      es.onopen = () => {
+        retries = 0; // healthy stream — reset the backoff
+      };
+
+      es.onmessage = (ev) => {
+        let msg: AlertEvent;
+        try {
+          msg = JSON.parse(ev.data);
+        } catch {
+          return;
+        }
+        if (!msg?.type?.startsWith("alert.")) return;
+
+        if (msg.type === "alert.created" || msg.type === "alert.confirmed") {
+          // Dedupe by alert id: created→confirmed is one alert, so toast + notify
+          // once (pushAlertNotif returns false if this id is already in the bell).
+          const added = pushAlertNotif({
+            id: msg.data.id,
+            type: msg.type,
+            severity: msg.data.severity,
+            parameter: msg.data.parameter,
+            message: msg.data.message,
+            messageAr: msg.data.message_ar,
+            issuedAt: msg.data.issued_at,
+          });
+          if (added) {
+            const { t: tt, td: ttd } = cbRef.current;
+            const label = ttd(paramLabel(msg.data.parameter));
+            toast(tt("events.newAlert", { param: label }), "info");
+          }
+        }
+        // Any alert event (create/confirm/resolve/update) can change the lists +
+        // badge counts on the open screen — pull fresh server data.
+        scheduleRefresh();
+      };
+
+      es.onerror = () => {
+        // A transient drop leaves readyState=CONNECTING and EventSource
+        // reconnects itself. A non-2xx response (401 on token expiry, 502 when
+        // the backend is down) sets readyState=CLOSED and it gives up for good —
+        // reconnect manually with capped exponential backoff so realtime
+        // self-heals once auth/backend recover instead of dying silently.
+        if (!es || es.readyState !== EventSource.CLOSED || stopped) return;
+        es.close();
+        const delay = Math.min(30_000, 1_000 * 2 ** retries);
+        retries += 1;
+        reconnectTimer = setTimeout(connect, delay);
+      };
     };
-    es.onerror = () => {
-      // Transient network blip — EventSource reconnects automatically.
-    };
+
+    connect();
 
     return () => {
-      es.close();
+      stopped = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      es?.close();
       if (refreshTimer.current) clearTimeout(refreshTimer.current);
     };
   }, []);

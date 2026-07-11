@@ -221,7 +221,18 @@ export const LeafletLibyaMap = React.forwardRef<
     });
   }, [stations, selectedStationId, showLabels, locale]);
 
-  // Camera reacts to selection: fly to the station or back to the overview.
+  // Latest stations in a ref so the camera effect can read coordinates WITHOUT
+  // depending on `stations`. Depending on it re-flew the camera on every
+  // SSE/router.refresh() (which hands down a new array reference), discarding the
+  // user's manual pan/zoom. Marker rendering above still reacts to `stations`.
+  const stationsRef = React.useRef(stations);
+  // Update the ref in an effect (not during render — react-hooks/refs) so the
+  // camera effect below reads the latest coordinates without depending on it.
+  React.useEffect(() => {
+    stationsRef.current = stations;
+  }, [stations]);
+
+  // Camera reacts to SELECTION only: fly to the station or back to the overview.
   React.useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -229,10 +240,10 @@ export const LeafletLibyaMap = React.forwardRef<
       map.flyToBounds(LIBYA_BOUNDS, { ...FIT_BOUNDS_OPTIONS, ...FLY_OPTIONS });
       return;
     }
-    const target = stations.find((s) => s.id === selectedStationId);
+    const target = stationsRef.current.find((s) => s.id === selectedStationId);
     if (!target) return;
     map.flyTo([target.latitude, target.longitude], STATION_ZOOM, FLY_OPTIONS);
-  }, [selectedStationId, stations]);
+  }, [selectedStationId]);
 
   React.useImperativeHandle(
     ref,

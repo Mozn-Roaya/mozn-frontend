@@ -335,9 +335,13 @@ export function AlertInboxView({ page }: { page: AlertInboxPage }) {
   // Reset to page 1 when the filter set changes — adjusted during render (the
   // pattern used elsewhere in the app) rather than in an effect, so it commits
   // once with no flash of the pre-reset page.
-  const [pagedFilters, setPagedFilters] = React.useState({ severities, query });
-  if (pagedFilters.severities !== severities || pagedFilters.query !== query) {
-    setPagedFilters({ severities, query });
+  const [pagedFilters, setPagedFilters] = React.useState({ severities, query, sort });
+  if (
+    pagedFilters.severities !== severities ||
+    pagedFilters.query !== query ||
+    pagedFilters.sort !== sort
+  ) {
+    setPagedFilters({ severities, query, sort });
     setPageIndex(1);
   }
 

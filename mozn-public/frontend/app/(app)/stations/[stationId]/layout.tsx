@@ -17,7 +17,10 @@ export default async function StationLayout({
   const lang = await getServerLang();
   let station;
   try {
-    station = await getStation(decodeURIComponent(stationId));
+    // fresh:true so this matches the page's getStation({fresh:true}) — same fetch
+    // options let Next dedupe them (one fetch, not two) and keep the side panel's
+    // alert state in sync with the page instead of up-to-60s stale.
+    station = await getStation(decodeURIComponent(stationId), { fresh: true });
   } catch {
     notFound();
   }

@@ -72,8 +72,8 @@ function TemperatureCard({
 }: {
   temp: number;
   feelsLike: number;
-  high: number;
-  low: number;
+  high: number | null;
+  low: number | null;
   unit: TempUnit;
 }) {
   const t = useT();
@@ -98,7 +98,10 @@ function TemperatureCard({
             {t("dashboard.station.feelsLike", { v: toTemp(feelsLike, unit) })}
           </p>
           <p className="text-xs font-medium tabular-nums text-foreground">
-            {t("dashboard.station.highLow", { high: toTemp(high, unit), low: toTemp(low, unit) })}
+            {t("dashboard.station.highLow", {
+              high: high != null ? toTemp(high, unit) : "—",
+              low: low != null ? toTemp(low, unit) : "—",
+            })}
           </p>
         </div>
       </div>
@@ -484,6 +487,10 @@ export function StationSummaryCard({
     ...(weather ?? {}),
     ...(forecast && forecast.length > 0 ? { forecast } : {}),
   };
+  // Today's high/low come from the forecast (detail.high/low are never populated;
+  // the real daily min/max live on the fetched forecast days). Fall back to the
+  // nearest day if the first forecast day isn't today.
+  const todayForecast = detail.forecast?.find((d) => d.key === "today") ?? detail.forecast?.[0];
   const displayName =
     locale === "ar" && detail.nameAr ? detail.nameAr : td(detail.name);
 
@@ -564,8 +571,8 @@ export function StationSummaryCard({
               <TemperatureCard
                 temp={detail.temp}
                 feelsLike={detail.feelsLike ?? 0}
-                high={detail.high ?? 0}
-                low={detail.low ?? 0}
+                high={todayForecast?.high ?? null}
+                low={todayForecast?.low ?? null}
                 unit={tempUnit}
               />
 

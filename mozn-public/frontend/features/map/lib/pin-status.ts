@@ -16,10 +16,15 @@ export type PinKind = ApiSeverity | StationStatus;
 /**
  * Status → color. Operational state of the station itself.
  */
-export const STATUS_COLOR: Readonly<Record<StationStatus, string>> = {
+// Keyed by string (not StationStatus) because the backend Status enum also emits
+// values the FE type omits — chiefly 'maintenance' — which reach a pin when the
+// station has no active/forecast alert. Without an entry the pin colour was
+// undefined; give it a defined, muted colour.
+export const STATUS_COLOR: Readonly<Record<string, string>> = {
   normal: "var(--color-status-normal-500)",
   warning: "var(--color-status-warning-500)",
   offline: "var(--color-status-offline-400)",
+  maintenance: "var(--color-status-offline-400)",
 };
 
 /**
