@@ -389,7 +389,15 @@ export function AlertManagementView({ initialAlerts }: { initialAlerts: ManagedA
         case "severity": default: return SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] || STATUS_RANK[a.status] - STATUS_RANK[b.status];
       }
     };
-    return [...scoped].sort((a, b) => cmp(a, b) * dir);
+    return [...scoped].sort((a, b) => {
+      // Live (active) alerts always sort above resolved ones — regardless of the
+      // selected column/direction — so the actionable rows are always on top; the
+      // chosen sort then orders rows WITHIN each group.
+      if (STATUS_RANK[a.status] !== STATUS_RANK[b.status]) {
+        return STATUS_RANK[a.status] - STATUS_RANK[b.status];
+      }
+      return cmp(a, b) * dir;
+    });
   }, [alerts, statuses, query, sort, t, typeLabel]);
 
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
