@@ -110,7 +110,9 @@ const STATUS_STYLE: Record<
   resolved: { variant: "normal", dot: "bg-status-normal" },
 };
 
-const STATUS_FILTERS: ManagedStatus[] = ["active", "acknowledged", "resolved"];
+// Acknowledged is a pending/Inbox concept; Active Alerts only holds confirmed
+// (active) + resolved, so its status facet lists just those two.
+const STATUS_FILTERS: ManagedStatus[] = ["active", "resolved"];
 
 const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
@@ -570,7 +572,10 @@ export function AlertManagementView({ initialAlerts }: { initialAlerts: ManagedA
                                 {t("alertmgmt.action.resolve")}
                               </Button>
                             ) : null}
-                            {can("alerts.modify") ? (
+                            {/* Severity is editable ONLY on manual alerts — engine
+                                alerts (observed/forecast/compound) have it driven by
+                                live data and the backend rejects the change. */}
+                            {can("alerts.modify") && a.source === "manual" ? (
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <Button

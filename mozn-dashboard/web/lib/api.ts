@@ -856,15 +856,15 @@ export async function getActiveAlerts(): Promise<ManagedAlert[]> {
 
   const now = Date.now();
   return alerts
-    .filter((a) => a.is_active || a.status === "resolved")
+    // Active Alerts = the alerts that have PASSED triage (confirmed → live/public)
+    // plus recently resolved ones. Pending/acknowledged alerts live only in the
+    // Alert Inbox until an operator confirms or rejects them, so the two screens
+    // don't overlap and "active" here always means confirmed & citizen-visible.
+    .filter((a) => (a.is_active && a.status === "confirmed") || a.status === "resolved")
     .map((a) => {
       const st = a.station_id ? lookup.get(a.station_id) : undefined;
       const metric = paramToMetric(a.parameter);
-      const status: ManagedStatus = !a.is_active
-        ? "resolved"
-        : a.acknowledged_at
-          ? "acknowledged"
-          : "active";
+      const status: ManagedStatus = a.is_active ? "active" : "resolved";
       return {
         id: a.id,
         typeKey: a.source === "compound" ? "compound" : (metric ?? "compound"),
