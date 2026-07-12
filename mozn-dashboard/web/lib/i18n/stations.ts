@@ -85,8 +85,8 @@ export const stations: Record<string, Entry> = {
 
   // Sensors
   "stations.sensorsHint": {
-    en: "Select the sensors physically installed at this station.",
-    ar: "حدّد الحسّاسات المركّبة فعلياً في هذه المحطة.",
+    en: "All stations currently report the full sensor set. Per-station selection will arrive in a future update.",
+    ar: "تُبلّغ جميع المحطات حالياً بمجموعة الحسّاسات الكاملة. سيتوفّر التحديد لكل محطة في تحديث لاحق.",
   },
   "stations.sensor.temperature": { en: "Temperature", ar: "درجة الحرارة" },
   "stations.sensor.humidity": { en: "Humidity", ar: "الرطوبة" },

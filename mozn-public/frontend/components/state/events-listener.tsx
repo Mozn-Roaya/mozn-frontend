@@ -33,7 +33,9 @@ export function EventsListener() {
         } catch {
           return;
         }
-        if (!msg?.type?.startsWith("alert.")) return;
+        // alert.* (new/confirmed/resolved) AND station.* (e.g. a station put into
+        // maintenance) both change the map — refresh on either.
+        if (!msg?.type?.startsWith("alert.") && !msg?.type?.startsWith("station.")) return;
         // Coalesce a burst into one refresh.
         if (timer) return;
         timer = setTimeout(() => {

@@ -90,7 +90,9 @@ export function EventsProvider() {
         } catch {
           return;
         }
-        if (!msg?.type?.startsWith("alert.")) return;
+        // alert.* drives toasts/notifs below; station.* (e.g. → maintenance) just
+      // needs a refresh so the map + lists reflect it live.
+      if (!msg?.type?.startsWith("alert.") && !msg?.type?.startsWith("station.")) return;
 
         if (msg.type === "alert.created" || msg.type === "alert.confirmed") {
           // Dedupe by alert id: created→confirmed is one alert, so toast + notify

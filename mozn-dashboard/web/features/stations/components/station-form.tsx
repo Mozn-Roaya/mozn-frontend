@@ -31,9 +31,7 @@ import { StationSummaryCard } from "@/components/station-detail/station-summary-
 import type { StationDetail } from "@/components/station-detail/station-detail";
 import type { MunicipalityOption } from "@/lib/api";
 import {
-  DEFAULT_SENSORS,
   isInLibya,
-  paramsToSensors,
   SENSORS,
   sensorsToParams,
   type SensorKey,
@@ -112,12 +110,13 @@ export function StationForm({
       : initial?.operationalStatus === "deactivated"
         ? "offline"
         : "active";
-  const initialSensors = initial?.sensors
-    ? paramsToSensors(initial.sensors)
-    : SENSORS.reduce(
-        (acc, s) => ({ ...acc, [s]: DEFAULT_SENSORS.includes(s) }),
-        {} as Record<SensorKey, boolean>,
-      );
+  // Per-station sensor selection isn't configurable yet — every station reports
+  // the full set — so all sensors are pre-selected and the picker is shown
+  // disabled (a placeholder for a future per-station-type capability).
+  const initialSensors = SENSORS.reduce(
+    (acc, s) => ({ ...acc, [s]: true }),
+    {} as Record<SensorKey, boolean>,
+  );
 
   const [form, setForm] = React.useState<StationFormValue>(() => ({
     name: initial?.name ?? "",
@@ -481,12 +480,10 @@ export function StationForm({
             <SectionHead title={t("stations.section.sensors")} hint={t("stations.sensorsHint")} />
             <div className="mt-5 grid grid-cols-2 gap-x-8 gap-y-3.5">
               {SENSORS.map((s) => (
-                <label key={s} className="flex cursor-pointer items-center gap-2.5 text-sm">
-                  <Checkbox
-                    checked={form.sensors[s]}
-                    onCheckedChange={(v) => set("sensors", { ...form.sensors, [s]: Boolean(v) })}
-                  />
-                  <span className="font-medium text-foreground">{t("stations.sensor." + s)}</span>
+                <label key={s} className="flex items-center gap-2.5 text-sm">
+                  {/* Disabled: all sensors are on and not per-station configurable yet. */}
+                  <Checkbox checked disabled />
+                  <span className="font-medium text-muted-foreground">{t("stations.sensor." + s)}</span>
                 </label>
               ))}
             </div>
