@@ -35,7 +35,9 @@ export const alertManagement: Record<string, Entry> = {
   // Detail labels
   "alertmgmt.trigger": { en: "Trigger & readings", ar: "المُحفّز والقراءات" },
   "alertmgmt.duration": { en: "Duration", ar: "المدة" },
-  "alertmgmt.durationValue": { en: "{min} min", ar: "{min} دقيقة" },
+  "alertmgmt.timing": { en: "Timing", ar: "التوقيت" },
+  "alertmgmt.startsLabel": { en: "Starts", ar: "يبدأ" },
+  "alertmgmt.durationValue": { en: "active {min} min", ar: "نشط منذ {min} د" },
 
   // Status pills
   "alertmgmt.status.active": { en: "Active", ar: "نشط" },
@@ -76,6 +78,9 @@ export const alertManagement: Record<string, Entry> = {
   "alertmgmt.create.severity": { en: "Severity", ar: "مستوى الخطورة" },
   "alertmgmt.create.value": { en: "Reading value", ar: "قيمة القراءة" },
   "alertmgmt.create.optional": { en: "(optional)", ar: "(اختياري)" },
+  "alertmgmt.create.startsAt": { en: "Starts at", ar: "يبدأ في" },
+  "alertmgmt.create.expiresAt": { en: "Expires at", ar: "ينتهي في" },
+  "alertmgmt.create.badWindow": { en: "End time must be after the start time.", ar: "يجب أن يكون وقت الانتهاء بعد وقت البدء." },
   "alertmgmt.create.message": { en: "Message (English)", ar: "الرسالة (بالإنجليزية)" },
   "alertmgmt.create.messagePlaceholder": { en: "What citizens should know", ar: "ما يجب أن يعرفه المواطنون" },
   "alertmgmt.create.messageAr": { en: "Message (Arabic)", ar: "الرسالة (بالعربية)" },

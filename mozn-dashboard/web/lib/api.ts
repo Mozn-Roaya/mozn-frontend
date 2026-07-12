@@ -877,6 +877,14 @@ export async function getActiveAlerts(): Promise<ManagedAlert[]> {
         trigger: locale === "ar" ? a.message_ar || a.message : a.message,
         readings: metric ? [{ metric, value: `${a.value}${paramUnit(a.parameter)}` }] : [],
         durationMin: Math.max(0, Math.round((now - new Date(a.issued_at).getTime()) / 60_000)),
+        // Timeline so the table can show WHEN a forecast/scheduled alert occurs
+        // (not just how long it's been active). leadMin is computed here (server
+        // clock) to stay hydration-stable, mirroring durationMin.
+        source: a.source,
+        issuedAt: a.issued_at,
+        startsAt: a.starts_at ?? null,
+        expiresAt: a.expires_at ?? null,
+        leadMin: a.starts_at ? Math.round((new Date(a.starts_at).getTime() - now) / 60_000) : null,
       };
     });
 }

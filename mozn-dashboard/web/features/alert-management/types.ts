@@ -14,4 +14,13 @@ export interface ManagedAlert {
   trigger: string;
   readings: { metric: ThresholdMetric; value: string }[];
   durationMin: number;
+  /** Alert origin — 'forecast' alerts announce a future window, so the table
+   *  shows when they occur rather than how long they've been active. */
+  source: string;
+  issuedAt: string;
+  /** Forecast/scheduled window (ISO). Absent for immediate observed alerts. */
+  startsAt?: string | null;
+  expiresAt?: string | null;
+  /** Minutes until startsAt (server-computed; negative once it has started). */
+  leadMin?: number | null;
 }

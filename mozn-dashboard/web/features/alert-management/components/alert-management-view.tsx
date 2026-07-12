@@ -129,6 +129,8 @@ type CreateAlertDraft = {
   value: string;
   message: string;
   messageAr: string;
+  startsAt: string; // datetime-local; blank = immediate
+  expiresAt: string;
 };
 const EMPTY_ALERT: CreateAlertDraft = {
   stationId: "",
@@ -137,7 +139,38 @@ const EMPTY_ALERT: CreateAlertDraft = {
   value: "",
   message: "",
   messageAr: "",
+  startsAt: "",
+  expiresAt: "",
 };
+
+/** Localized absolute date-time in Libya local time, Latin digits (matches the
+ *  rest of the app). Used for a forecast/scheduled alert's window. */
+function fmtDateTime(iso: string, locale: string): string {
+  try {
+    return new Intl.DateTimeFormat(locale === "ar" ? "ar-LY-u-nu-latn" : "en-GB", {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone: "Africa/Tripoli",
+    }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
+}
+
+/** "in 6h" / "خلال 6 س" from a server-computed minutes-until-start (no Date.now,
+ *  so it's hydration-stable). */
+function fmtLead(min: number, locale: string): string {
+  const ar = locale === "ar";
+  if (min <= 0) return ar ? "جارٍ الآن" : "now";
+  if (min < 60) return ar ? `خلال ${min} د` : `in ${min}m`;
+  const h = Math.round(min / 60);
+  if (h < 48) return ar ? `خلال ${h} س` : `in ${h}h`;
+  const d = Math.round(h / 24);
+  return ar ? `خلال ${d} ي` : `in ${d}d`;
+}
 
 type SortKey = "severity" | "type" | "trigger" | "duration" | "status";
 
@@ -197,6 +230,10 @@ export function AlertManagementView({ initialAlerts }: { initialAlerts: ManagedA
       toast(t("alertmgmt.create.incomplete"), "info");
       return;
     }
+    if (d.startsAt && d.expiresAt && new Date(d.expiresAt) <= new Date(d.startsAt)) {
+      toast(t("alertmgmt.create.badWindow"), "info");
+      return;
+    }
     setCreating(true);
     try {
       const res = await fetch(`${BASE}/api/alerts`, {
@@ -209,6 +246,9 @@ export function AlertManagementView({ initialAlerts }: { initialAlerts: ManagedA
           message: d.message.trim(),
           message_ar: d.messageAr.trim(),
           ...(d.value.trim() !== "" && !Number.isNaN(Number(d.value)) ? { value: Number(d.value) } : {}),
+          // datetime-local is browser-local time → ISO (UTC) for the backend.
+          ...(d.startsAt ? { starts_at: new Date(d.startsAt).toISOString() } : {}),
+          ...(d.expiresAt ? { expires_at: new Date(d.expiresAt).toISOString() } : {}),
         }),
       });
       const json = (await res.json().catch(() => ({}))) as { error?: string };
@@ -418,7 +458,7 @@ export function AlertManagementView({ initialAlerts }: { initialAlerts: ManagedA
               <SortableHead label={t("alertmgmt.col.severity")} column="severity" sort={sort} onSort={onSort} />
               <SortableHead label={t("alertmgmt.col.type")} column="type" sort={sort} onSort={onSort} />
               <SortableHead label={t("alertmgmt.trigger")} column="trigger" sort={sort} onSort={onSort} />
-              <SortableHead label={t("alertmgmt.duration")} column="duration" sort={sort} onSort={onSort} />
+              <SortableHead label={t("alertmgmt.timing")} column="duration" sort={sort} onSort={onSort} />
               <SortableHead label={t("alertmgmt.col.status")} column="status" sort={sort} onSort={onSort} />
               <TableHead className="pe-4 text-end">{t("alertmgmt.col.action")}</TableHead>
             </TableRow>
@@ -476,8 +516,26 @@ export function AlertManagementView({ initialAlerts }: { initialAlerts: ManagedA
                         <p className="mt-1 text-xs tabular-nums text-muted-foreground">{readings}</p>
                       ) : null}
                     </TableCell>
-                    <TableCell className="whitespace-nowrap align-top tabular-nums text-muted-foreground">
-                      {t("alertmgmt.durationValue", { min: a.durationMin })}
+                    <TableCell className="whitespace-nowrap align-top text-muted-foreground" suppressHydrationWarning>
+                      {a.startsAt ? (
+                        // Forecast/scheduled: show WHEN it occurs + lead time.
+                        <div className="flex flex-col leading-tight">
+                          <span className="text-[11px] font-medium uppercase tracking-wide text-status-advisory">
+                            {t("alertmgmt.startsLabel")}
+                          </span>
+                          <span className="text-sm tabular-nums text-foreground">
+                            {fmtDateTime(a.startsAt, locale)}
+                          </span>
+                          {a.leadMin != null ? (
+                            <span className="text-xs tabular-nums">{fmtLead(a.leadMin, locale)}</span>
+                          ) : null}
+                        </div>
+                      ) : (
+                        // Immediate observed/manual: how long it's been active.
+                        <span className="text-sm tabular-nums">
+                          {t("alertmgmt.durationValue", { min: a.durationMin })}
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell className="align-top">
                       <DotBadge variant={st.variant} dotClass={st.dot}>
@@ -669,6 +727,22 @@ export function AlertManagementView({ initialAlerts }: { initialAlerts: ManagedA
                   {draftParamUnit ? (
                     <span className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">{draftParamUnit}</span>
                   ) : null}
+                </div>
+              </div>
+              {/* Optional schedule — a forecast-style announcement with a future
+                  window. Blank = an immediate alert. */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <label htmlFor="alert-starts" className="text-sm font-medium text-foreground">
+                    {t("alertmgmt.create.startsAt")} <span className="font-normal text-muted-foreground">{t("alertmgmt.create.optional")}</span>
+                  </label>
+                  <Input id="alert-starts" type="datetime-local" dir="ltr" value={alertDraft.startsAt} onChange={(e) => setAlertDraft((d) => ({ ...d, startsAt: e.target.value }))} className="tabular-nums" />
+                </div>
+                <div className="grid gap-2">
+                  <label htmlFor="alert-expires" className="text-sm font-medium text-foreground">
+                    {t("alertmgmt.create.expiresAt")} <span className="font-normal text-muted-foreground">{t("alertmgmt.create.optional")}</span>
+                  </label>
+                  <Input id="alert-expires" type="datetime-local" dir="ltr" value={alertDraft.expiresAt} onChange={(e) => setAlertDraft((d) => ({ ...d, expiresAt: e.target.value }))} className="tabular-nums" />
                 </div>
               </div>
               <div className="grid gap-2">
