@@ -425,16 +425,9 @@ export function CompoundRulesManager({
                           placeholder={t("compound.value")}
                           aria-label={t("compound.value")}
                         />
-                        <Input
-                          type="number"
-                          inputMode="numeric"
-                          dir="ltr"
-                          value={c.sustain}
-                          onChange={(e) => setCond(i, { sustain: e.target.value })}
-                          className="h-9 w-24 tabular-nums"
-                          placeholder={t("compound.sustain")}
-                          aria-label={t("compound.sustain")}
-                        />
+                        {/* No sustain input: the backend does not support
+                            sustain_minutes on compound conditions yet (M7), and
+                            sending it is rejected. Re-add when the engine supports it. */}
                         <Button
                           type="button"
                           variant="ghost"

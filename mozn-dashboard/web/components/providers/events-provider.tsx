@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "@/components/ui/toaster";
 import { useT, useTD } from "@/components/providers/locale-provider";
 import { paramLabel } from "@/lib/mappers";
-import { hydrateNotifs, pushAlertNotif } from "@/components/layout/notifications-store";
+import { hydrateNotifs, pushAlertNotif, seedAlertNotifs } from "@/components/layout/notifications-store";
 
 const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
@@ -53,6 +53,15 @@ export function EventsProvider() {
   React.useEffect(() => {
     // Restore persisted notifications so the bell survives reloads/navigation.
     hydrateNotifs();
+    // Backfill from the server so alerts that fired while the dashboard was
+    // CLOSED show up in the bell too (SSE only captures what happens while open).
+    const bp = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+    fetch(`${bp}/api/notifications`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (Array.isArray(j?.data)) seedAlertNotifs(j.data);
+      })
+      .catch(() => {});
 
     const scheduleRefresh = () => {
       if (refreshTimer.current) return;

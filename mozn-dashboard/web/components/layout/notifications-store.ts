@@ -20,8 +20,12 @@ export interface AlertNotif {
 }
 
 const KEY = "mozn-notifs";
+const SEEN_KEY = "mozn-notifs-seen";
 const CAP = 30;
 let notifs: AlertNotif[] = [];
+// ms watermark: on a server backfill, alerts issued AFTER this are unread
+// (missed while away); older ones come in read so the badge isn't flooded.
+let lastSeenAt = 0;
 let listeners: Array<() => void> = [];
 let hydrated = false;
 
@@ -37,6 +41,14 @@ function persist() {
   }
 }
 
+function persistSeen() {
+  try {
+    localStorage.setItem(SEEN_KEY, String(lastSeenAt));
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 /** Load persisted notifications once, on the client, after hydration — so the
  * server render (empty) and the client's first render (empty) match, then the
  * stored list fills in. Call from a client effect (see events-provider). */
@@ -44,6 +56,7 @@ export function hydrateNotifs() {
   if (hydrated || typeof window === "undefined") return;
   hydrated = true;
   try {
+    lastSeenAt = Number(localStorage.getItem(SEEN_KEY)) || 0;
     const raw = localStorage.getItem(KEY);
     const saved = raw ? (JSON.parse(raw) as AlertNotif[]) : [];
     if (Array.isArray(saved) && saved.length) {
@@ -66,7 +79,35 @@ export function pushAlertNotif(n: Omit<AlertNotif, "read">): boolean {
   return true;
 }
 
+/** Backfill from the server on load so a user who was away still sees what
+ *  happened. Deduped by id (existing entries keep their read state). A new entry
+ *  is unread iff it was issued after the user last viewed the bell (lastSeenAt);
+ *  older history comes in read. First-ever load establishes "now" as the baseline
+ *  so the initial history isn't all flagged unread. */
+export function seedAlertNotifs(items: Array<Omit<AlertNotif, "read">>) {
+  if (typeof window === "undefined" || items.length === 0) return;
+  if (lastSeenAt === 0) {
+    lastSeenAt = Date.now();
+    persistSeen();
+  }
+  const seen = new Set(notifs.map((n) => n.id));
+  const additions: AlertNotif[] = [];
+  for (const it of items) {
+    if (seen.has(it.id)) continue;
+    additions.push({ ...it, read: (Date.parse(it.issuedAt) || 0) <= lastSeenAt });
+  }
+  if (additions.length === 0) return;
+  notifs = [...additions, ...notifs]
+    .sort((a, b) => (Date.parse(b.issuedAt) || 0) - (Date.parse(a.issuedAt) || 0))
+    .slice(0, CAP);
+  persist();
+  emit();
+}
+
 export function markAllNotifsRead() {
+  // Mark this moment as "seen" so a later backfill won't resurface these as unread.
+  lastSeenAt = Date.now();
+  persistSeen();
   if (notifs.every((n) => n.read)) return;
   notifs = notifs.map((n) => (n.read ? n : { ...n, read: true }));
   persist();

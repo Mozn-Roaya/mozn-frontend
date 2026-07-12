@@ -881,6 +881,41 @@ export async function getActiveAlerts(): Promise<ManagedAlert[]> {
     });
 }
 
+/** Raw fields the notification bell stores (localized at render). */
+export interface RecentAlertNotif {
+  id: string;
+  type: string;
+  severity: string;
+  parameter: string;
+  message: string;
+  messageAr: string;
+  issuedAt: string;
+}
+
+/**
+ * Recent notable alerts (last 48h, pending/confirmed) for BACKFILLING the
+ * notification bell on load — so a user who was away still sees what happened,
+ * not just what fired over SSE while the dashboard was open. Region-scoped
+ * server-side for gov users. Best-effort (empty on failure).
+ */
+export async function getRecentAlertNotifs(): Promise<RecentAlertNotif[]> {
+  const from = new Date(Date.now() - 48 * 3_600_000).toISOString();
+  const alerts = await backendData<BackendAlert[]>(
+    `/api/alerts?from=${from}&page_size=30`,
+  ).catch(() => [] as BackendAlert[]);
+  return alerts
+    .filter((a) => a.status === "pending" || a.status === "confirmed")
+    .map((a) => ({
+      id: a.id,
+      type: "alert.created",
+      severity: a.severity,
+      parameter: a.parameter,
+      message: a.message,
+      messageAr: a.message_ar,
+      issuedAt: a.issued_at,
+    }));
+}
+
 // ── Alert action writers (thin backend proxies for route handlers) ──────────
 
 export function acknowledgeAlert(id: string, note?: string): Promise<MutationResult<BackendAlert>> {
