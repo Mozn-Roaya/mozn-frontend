@@ -77,7 +77,7 @@ export function RecentActivity({ items }: { items: ActivityItem[] }) {
       {items.length === 0 ? (
         <EmptyState icon={History} message={t("dashboard.recentActivity.empty")} />
       ) : (
-        <Table className="min-w-[640px] [&_tr:last-child]:border-0">
+        <Table className="[&_tr:last-child]:border-0">
           <TableHeader>
             <TableRow className={tableHeaderRowClass}>
               <TableHead className="ps-6">{t("history.col.actor")}</TableHead>

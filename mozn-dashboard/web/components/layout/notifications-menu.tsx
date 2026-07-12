@@ -72,7 +72,7 @@ export function NotificationsMenu() {
         </Button>
       </PopoverTrigger>
 
-      <PopoverContent align="end" sideOffset={8} className="w-[calc(100vw-2rem)] max-w-[360px] p-0">
+      <PopoverContent align="end" sideOffset={8} className="w-[360px] p-0">
         <div className="flex items-center justify-between gap-2 border-b border-border-subtle px-4 py-3">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold">{t("notif.title")}</h2>

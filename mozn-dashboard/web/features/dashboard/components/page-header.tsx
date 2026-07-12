@@ -98,7 +98,7 @@ export function PageHeader({
       </div>
 
       <TooltipProvider>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-3">
           {/* Data freshness + manual refresh (router.refresh re-runs the fetch). */}
           <div className="flex items-center gap-1">
             {updatedLabel ? (

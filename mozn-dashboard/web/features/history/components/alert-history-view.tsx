@@ -331,7 +331,7 @@ export function AlertHistoryView({ page, range }: { page: AlertHistoryPage; rang
             {t("common.export")}
           </Button>
         </SelectionBar>
-        <Table className="min-w-[880px]" containerClassName="max-h-[calc(100vh-440px)] min-h-[260px]">
+        <Table containerClassName="max-h-[calc(100vh-440px)] min-h-[260px]">
           <TableHeader>
             <TableRow className={tableHeaderRowClass}>
               <TableHead className="w-10 ps-4">

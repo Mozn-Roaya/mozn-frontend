@@ -581,7 +581,7 @@ export function UsersTable({
         ) : null}
       </SelectionBar>
 
-      <Table className="min-w-[720px]" containerRef={scrollRef} containerClassName="min-h-0 flex-1">
+      <Table containerRef={scrollRef} containerClassName="min-h-0 flex-1">
         <TableHeader>
           <TableRow className={tableHeaderRowClass}>
             <TableHead className="w-10 ps-4">
@@ -718,7 +718,7 @@ export function UsersTable({
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogContent>
           <DialogHeader className="flex-row items-center gap-3.5 space-y-0">
             <span
               aria-hidden

@@ -306,7 +306,7 @@ export function ActivityLogView({ page }: { page: ActivityLogPage }) {
 
         <SelectionBar count={selected.size} onClear={() => setSelected(new Set())} />
 
-        <Table className="min-w-[680px]" containerClassName="max-h-[calc(100vh-320px)] min-h-[280px]">
+        <Table containerClassName="max-h-[calc(100vh-320px)] min-h-[280px]">
           <TableHeader>
             {/* Columns are auto-distributed across the full width (no fixed
                 widths) so they spread evenly like the Users table; only the
