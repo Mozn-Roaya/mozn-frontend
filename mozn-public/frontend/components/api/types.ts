@@ -15,7 +15,9 @@ export type PaginationMeta = {
   total_pages: number;
 };
 
-export type StationStatus = "normal" | "warning" | "offline";
+// The backend derives these for the public map. "maintenance" is a deliberate
+// operator state (station under review); it renders as a muted pin like offline.
+export type StationStatus = "normal" | "warning" | "offline" | "maintenance";
 
 export type AlertCounts = {
   total: number;

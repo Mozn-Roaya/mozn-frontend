@@ -214,6 +214,11 @@ function StatusChip({
       color: "var(--color-status-offline-400)",
       bg: "var(--color-bg-offline-subtle)",
     },
+    maintenance: {
+      label: t.pinMaintenance,
+      color: "var(--color-status-offline-400)",
+      bg: "var(--color-bg-offline-subtle)",
+    },
   }[status];
 
   return (

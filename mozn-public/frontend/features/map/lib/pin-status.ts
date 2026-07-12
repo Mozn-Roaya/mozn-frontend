@@ -85,6 +85,8 @@ export function hazardFor(station: Station, lang: Lang = "en"): string {
       return t.pinWatch;
     case "offline":
       return t.pinOffline;
+    case "maintenance":
+      return t.pinMaintenance;
     default:
       return t.pinNormal;
   }

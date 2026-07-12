@@ -71,6 +71,7 @@ const EN = {
   pinWarning: "Warning",
   pinWatch: "Watch",
   pinOffline: "Offline",
+  pinMaintenance: "Maintenance",
   pinNormal: "Normal",
   // Accessible name for the standalone status dot (e.g. in search results).
   pinStatusAria: (status: string) => `Station status: ${status}`,
@@ -289,6 +290,7 @@ const AR: Dict = {
   pinWarning: "تحذير",
   pinWatch: "ترقب",
   pinOffline: "غير متصل",
+  pinMaintenance: "تحت الصيانة",
   pinNormal: "طبيعي",
   pinStatusAria: (status: string) => `حالة المحطة: ${status}`,
   windDirAria: (dir: string) => `اتجاه الرياح ${dir}`,
