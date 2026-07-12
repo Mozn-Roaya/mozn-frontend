@@ -144,7 +144,7 @@ export function RolePermissions({ matrix }: { matrix: RoleMatrix }) {
           <p className="mt-1 text-sm text-muted-foreground">{t("roles.subtitle")}</p>
         </div>
         <div className="overflow-x-auto">
-          <Table>
+          <Table className="min-w-[560px]">
             <TableHeader>
               <TableRow className={tableHeaderRowClass}>
                 <TableHead className="ps-6">{t("roles.col.permission")}</TableHead>

@@ -550,8 +550,8 @@ export function MetricThresholdsEditor({
         </nav>
 
         {/* Detail — the selected metric's editor. */}
-        <div className="min-w-0 p-6">
-          <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 p-4 sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h3 className="flex flex-wrap items-center gap-2 text-lg font-semibold tracking-tight text-foreground">
               {React.createElement(METRIC_ICON[metric.metric], {
                 className: "size-5 text-muted-foreground",
@@ -684,7 +684,7 @@ export function MetricThresholdsEditor({
       {/* Create-threshold dialog — region + parameter + severity + value, with a
           non-blocking impact preview (dry run) before committing. */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[92vh] overflow-y-auto">
           <DialogHeader className="flex-row items-center gap-3.5 space-y-0">
             <span
               aria-hidden

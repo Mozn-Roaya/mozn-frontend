@@ -415,7 +415,7 @@ export function AlertInboxView({ page }: { page: AlertInboxPage }) {
               </Button>
             ) : null}
           </SelectionBar>
-          <Table>
+          <Table className="min-w-[720px]">
             <TableHeader>
               <TableRow className={tableHeaderRowClass}>
                 <TableHead className="w-10 ps-4">

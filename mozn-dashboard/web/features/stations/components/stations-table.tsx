@@ -367,7 +367,7 @@ export function StationsTable({
           </SelectionBar>
         ) : null}
 
-        <Table containerClassName="max-h-[calc(100vh-300px)] min-h-[320px]">
+        <Table className="min-w-[720px]" containerClassName="max-h-[calc(100vh-300px)] min-h-[320px]">
           <TableHeader>
             <TableRow className={tableHeaderRowClass}>
               {!readOnly ? (

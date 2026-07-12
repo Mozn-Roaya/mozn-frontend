@@ -455,7 +455,7 @@ export function AlertManagementView({ initialAlerts }: { initialAlerts: ManagedA
       ) : (
         <>
         <SelectionBar count={selected.size} onClear={() => setSelected(new Set())} />
-        <Table>
+        <Table className="min-w-[900px]">
           <TableHeader>
             <TableRow className={tableHeaderRowClass}>
               <TableHead className="w-10 ps-4">

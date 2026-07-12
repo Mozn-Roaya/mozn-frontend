@@ -501,7 +501,7 @@ export function SettingsView({ page }: { page: SettingsPage }) {
                 ) : null}
               </div>
               <div className="overflow-hidden rounded-2xl border border-border">
-                <Table>
+                <Table className="min-w-[640px]">
                   <TableHeader>
                     <TableRow className={tableHeaderRowClass}>
                       <TableHead className="ps-4">{t("settings.table.metric")}</TableHead>
@@ -678,7 +678,7 @@ export function SettingsView({ page }: { page: SettingsPage }) {
         </aside>
 
         {/* Active section — sizes to its content. */}
-        <Card className="p-6">
+        <Card className="p-4 sm:p-6">
           <div className="mb-2 flex items-center gap-2.5 border-b border-border-subtle pb-4">
             <span className="grid size-9 place-items-center rounded-lg bg-brand-subtle text-brand-foreground">
               <activeMeta.icon className="size-5" aria-hidden />

@@ -340,7 +340,7 @@ export function StationForm({
         {/* Left — sectioned form */}
         <div className="space-y-6">
           {/* Identity */}
-          <Card className="p-6">
+          <Card className="p-4 sm:p-6">
             <SectionHead title={t("stations.section.identity")} hint={t("stations.identityHint")} />
             <div className="mt-5 grid gap-4">
               <Field label={t("stations.stationName")} htmlFor="st-name" required>
@@ -440,7 +440,7 @@ export function StationForm({
           </Card>
 
           {/* Location */}
-          <Card className="p-6">
+          <Card className="p-4 sm:p-6">
             <SectionHead title={t("stations.section.location")} hint={t("stations.locationHint")} />
             {/* Interactive Libya map — click or drag the pin to set coordinates */}
             <div className="relative mt-5 h-[620px] overflow-hidden rounded-2xl border border-border-subtle bg-secondary/50">
@@ -476,9 +476,9 @@ export function StationForm({
           </Card>
 
           {/* Sensors */}
-          <Card className="p-6">
+          <Card className="p-4 sm:p-6">
             <SectionHead title={t("stations.section.sensors")} hint={t("stations.sensorsHint")} />
-            <div className="mt-5 grid grid-cols-2 gap-x-8 gap-y-3.5">
+            <div className="mt-5 grid grid-cols-1 gap-x-8 gap-y-3.5 sm:grid-cols-2">
               {SENSORS.map((s) => (
                 <label key={s} className="flex items-center gap-2.5 text-sm">
                   {/* Disabled: all sensors are on and not per-station configurable yet. */}
@@ -491,7 +491,7 @@ export function StationForm({
 
           {/* Emergency contacts — per municipality (city), shared by all its
               stations. Saved to the backend on blur; readOnly can only view. */}
-          <Card className="p-6">
+          <Card className="p-4 sm:p-6">
             <SectionHead
               title={t("stations.section.emergency")}
               hint={
