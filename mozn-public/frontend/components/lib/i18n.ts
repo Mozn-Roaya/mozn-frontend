@@ -230,6 +230,14 @@ const EN = {
   fieldWindSpeed: "Wind Speed",
   fieldPressure: "Pressure",
   fieldCoordinates: "Coordinates",
+
+  // Live event toasts (SSE — new/cleared alerts + station status changes)
+  toastNewWarning: "New warning",
+  toastWarningCleared: "Warning cleared",
+  toastStatusMaintenance: "Under maintenance",
+  toastStatusRestored: "Back online",
+  toastStatusDeactivated: "Deactivated",
+  toastDismiss: "Dismiss notification",
 };
 
 export type Dict = typeof EN;
@@ -432,6 +440,14 @@ const AR: Dict = {
   fieldWindSpeed: "سرعة الرياح",
   fieldPressure: "الضغط الجوي",
   fieldCoordinates: "الإحداثيات",
+
+  // Live event toasts (SSE — new/cleared alerts + station status changes)
+  toastNewWarning: "تحذير جديد",
+  toastWarningCleared: "تم رفع التحذير",
+  toastStatusMaintenance: "تحت الصيانة",
+  toastStatusRestored: "عاد للعمل",
+  toastStatusDeactivated: "معطّلة",
+  toastDismiss: "إغلاق الإشعار",
 };
 
 const DICTS: Record<Lang, Dict> = { en: EN, ar: AR };
