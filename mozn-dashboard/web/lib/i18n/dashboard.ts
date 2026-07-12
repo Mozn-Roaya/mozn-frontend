@@ -79,7 +79,7 @@ export const dashboard: Record<string, Entry> = {
   "dashboard.station.wind": { en: "Wind Speed", ar: "سرعة الرياح" },
   "dashboard.station.humidity": { en: "Humidity", ar: "الرطوبة" },
   "dashboard.station.pressure": { en: "Pressure", ar: "الضغط" },
-  "dashboard.station.forecast": { en: "7-Day Forecast", ar: "توقعات 7 أيام" },
+  "dashboard.station.forecast": { en: "3-Day Forecast", ar: "توقعات 3 أيام" },
   "dashboard.station.noData": {
     en: "No weather data available for this station yet.",
     ar: "لا تتوفر بيانات طقس لهذه المحطة بعد.",

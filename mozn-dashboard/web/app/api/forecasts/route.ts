@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { ApiError, getStationForecast } from "@/lib/api";
 
-/** GET /dashboard/api/forecasts?station_id= — 7-day forecast for a station,
+/** GET /dashboard/api/forecasts?station_id= — 3-day forecast for a station,
  * aggregated for the station-summary card. Reflects live state — no cache. */
 export const dynamic = "force-dynamic";
 

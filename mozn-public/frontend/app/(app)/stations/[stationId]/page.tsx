@@ -39,7 +39,7 @@ export default async function StationOverviewPage({
 
   const [reading, forecast, alertsEnvelope] = await Promise.all([
     getLatestReading(decodedId).catch(() => null),
-    getDailyForecast(decodedId, 7).catch(() => []),
+    getDailyForecast(decodedId, 3).catch(() => []),
     // `station_id` is forward-compatible — backend currently ignores it (no
     // such filter in swagger), so we request the full active-alerts set
     // (cap = 1000) and narrow client-side. Once the backend honors the

@@ -1526,7 +1526,7 @@ export async function getStationForecast(stationId: string): Promise<ForecastDay
   return [...byDay.values()]
     .filter((b) => b.temps.length > 0)
     .sort((a, b) => (a.date < b.date ? -1 : 1))
-    .slice(0, 7)
+    .slice(0, 3)
     .map((b, i) => ({
       key: i === 0 && b.date === todayKey ? "today" : DAY_KEYS[new Date(b.date + "T00:00:00").getDay()],
       condition: forecastCondition(b.maxRain, b.maxGust, b.maxHumidity),

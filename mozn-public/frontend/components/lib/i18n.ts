@@ -134,7 +134,7 @@ const EN = {
   } as Record<CardinalKey, string>,
 
   // Forecast
-  forecastTitle: "7-Day Forecast",
+  forecastTitle: "3-Day Forecast",
   noForecast: "No forecast available.",
   today: "Today",
   daysShort: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as string[],
@@ -346,7 +346,7 @@ const AR: Dict = {
   },
 
   // Forecast
-  forecastTitle: "توقعات 7 أيام",
+  forecastTitle: "توقعات 3 أيام",
   noForecast: "لا توجد توقعات متاحة.",
   today: "اليوم",
   daysShort: ["أحد", "اثنين", "ثلاثاء", "أربعاء", "خميس", "جمعة", "سبت"],
