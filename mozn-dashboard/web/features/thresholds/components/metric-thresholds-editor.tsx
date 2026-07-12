@@ -118,12 +118,14 @@ const vkey = (m: { regionId: string; metric: string }) => `${m.regionId}:${m.met
 
 /** Parse the editable numbers out of a metric's seeded tier strings. */
 function toValues(m: MetricThresholds): MetricValues {
-  const find = (name: Tier) => m.tiers.find((tr) => tr.name.toLowerCase() === name);
-  return {
-    advisory: leadingNum(find("advisory")?.value ?? "0"),
-    watch: leadingNum(find("watch")?.value ?? "0"),
-    warning: leadingNum(find("warning")?.value ?? "0"),
+  // A tier with no backend row is UNSET → NaN (empty input), not 0. Showing a
+  // fake "0" made it look editable, but saving it was a no-op (no row to PUT),
+  // so the value "reset" on reload. Unset tiers are now created on save instead.
+  const num = (name: Tier) => {
+    const row = m.tiers.find((tr) => tr.name.toLowerCase() === name);
+    return row ? leadingNum(row.value) : NaN;
   };
+  return { advisory: num("advisory"), watch: num("watch"), warning: num("warning") };
 }
 
 export function MetricThresholdsEditor({
@@ -280,13 +282,21 @@ export function MetricThresholdsEditor({
   const setTier = (tier: Tier, next: number) =>
     setValues((prev) => ({ ...prev, [curKey]: { ...prev[curKey], [tier]: next } }));
 
-  // Monotonic guard: each tier must exceed the one below it (ascending metrics).
-  const lowerBound = (tier: Tier) =>
-    tier === "watch" ? v.advisory : tier === "warning" ? v.watch : null;
+  // Monotonic guard against the nearest CONFIGURED lower tier (tiers can be a
+  // partial set — a region/metric may have only some of advisory/watch/warning).
+  const lowerBound = (tier: Tier): number | null => {
+    if (tier === "warning") {
+      if (Number.isFinite(v.watch)) return v.watch;
+      if (Number.isFinite(v.advisory)) return v.advisory;
+      return null;
+    }
+    if (tier === "watch") return Number.isFinite(v.advisory) ? v.advisory : null;
+    return null; // advisory has nothing below it
+  };
   const invalid = (tier: Tier) => {
     const val = v[tier];
-    // Empty (NaN while the field is being retyped) can't be saved either.
-    if (!Number.isFinite(val)) return true;
+    // Unset (NaN) is allowed — the tier just isn't configured for this region.
+    if (!Number.isFinite(val)) return false;
     const lb = lowerBound(tier);
     return lb !== null && val <= lb;
   };
@@ -302,31 +312,56 @@ export function MetricThresholdsEditor({
       return;
     }
     const edited = values[curKey];
-    const changed = TIERS.map((tier) => {
+    // The metric's parameter (from an existing tier) drives creating missing tiers.
+    const param = metric.tiers[0]?.parameter;
+    const updates: { id: string; value: number }[] = [];
+    const creates: { severity: "yellow" | "orange" | "red"; value: number }[] = [];
+    for (const tier of TIERS) {
+      const val = edited[tier];
+      if (!Number.isFinite(val)) continue; // unset — nothing to save
       const row = metric.tiers.find((tr) => tr.name.toLowerCase() === tier);
-      if (!row?.id) return null;
-      return leadingNum(row.value) !== edited[tier] ? { id: row.id, value: edited[tier] } : null;
-    }).filter((x): x is { id: string; value: number } => x !== null);
-    if (changed.length === 0) {
+      if (row?.id) {
+        if (leadingNum(row.value) !== val) updates.push({ id: row.id, value: val });
+      } else if (param) {
+        // Tier has no backend row yet → create it (this is what previously "reset").
+        creates.push({ severity: TIER_TO_SEVERITY[tier], value: val });
+      }
+    }
+    if (updates.length === 0 && creates.length === 0) {
       toast(t("thresholds.noChanges"), "info");
       return;
     }
     setSaving(true);
+    const asResult = (r: Response) =>
+      r.ok
+        ? { ok: true, err: null as string | null }
+        : r.json().catch(() => ({})).then((j) => ({ ok: false, err: (j as { error?: string }).error ?? null }));
     try {
-      const results = await Promise.all(
-        changed.map((c) =>
+      const results = await Promise.all([
+        ...updates.map((c) =>
           fetch(`${BASE}/api/thresholds/${c.id}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ value: c.value }),
           })
-            .then(async (r) => ({
-              ok: r.ok,
-              err: r.ok ? null : ((await r.json().catch(() => ({}))) as { error?: string }).error,
-            }))
+            .then(asResult)
             .catch(() => ({ ok: false, err: null as string | null })),
         ),
-      );
+        ...creates.map((c) =>
+          fetch(`${BASE}/api/thresholds`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              region_id: metric.regionId,
+              parameter: param,
+              severity: c.severity,
+              value: c.value,
+            }),
+          })
+            .then(asResult)
+            .catch(() => ({ ok: false, err: null as string | null })),
+        ),
+      ]);
       const failed = results.filter((r) => !r.ok);
       toast(
         failed.length ? failed[0].err ?? t("thresholds.saveFailed") : t("thresholds.savedToast"),
@@ -634,9 +669,11 @@ export function MetricThresholdsEditor({
       <div className="flex flex-col gap-3 border-t border-border-subtle p-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="flex items-center gap-1.5 text-sm font-medium text-foreground">
           <TriangleAlert className="size-4 shrink-0 text-status-advisory" aria-hidden />
-          {footerImpact == null
-            ? t("thresholds.impact.calculating")
-            : t("thresholds.impact.note", { count: footerImpact })}
+          {!Number.isFinite(v.warning)
+            ? t("thresholds.impact.noWarning")
+            : footerImpact == null
+              ? t("thresholds.impact.calculating")
+              : t("thresholds.impact.note", { count: footerImpact })}
         </p>
         <Button className="shrink-0" onClick={save} disabled={!can("thresholds.update") || saving || anyInvalid}>
           <Check className="size-4" />

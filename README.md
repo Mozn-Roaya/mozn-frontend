@@ -1,84 +1,100 @@
-# Mozn — Early Warning System (merged)
+# Mozn — Early Warning System · Front-ends
 
-One repo, two front-ends served under a single origin via **Next.js Multi-Zones**:
+The two web front-ends for **Mozn**, a weather early-warning platform for Libya:
 
-| Surface | Path | Code | Dev port | Backend |
-| ------- | ---- | ---- | -------- | ------- |
-| **Public** map app (default zone, landing page) | `/`, `/stations/:id` | `mozn-public/frontend` | `3000` | remote weather API `https://mozn.org.ly/api` |
-| **Admin dashboard** (child zone) | `/dashboard/*` | `mozn-dashboard/web` | `3001` | local **Go** API `mozn-dashboard/server` on `:8080` |
+| App | Path | Audience | Role |
+| --- | --- | --- | --- |
+| **Admin dashboard** | `mozn-dashboard/web/` | MOZN operators | Monitor stations, triage the alert inbox, manage active alerts, tune thresholds, manage users, review history |
+| **Public map app** | `mozn-public/frontend/` | Citizens | Live map of stations, active alerts, and the 7-day forecast |
 
-You only ever open **http://localhost:3000**. The public app proxies every
-`/dashboard/*` request to the dashboard zone, and the **Dashboard** button in the
-public top-bar links to `/dashboard`.
+Both are **Next.js (App Router)** apps that talk to the same **Mozn backend API**
+(a separate Go service) over REST + a real-time SSE stream. They're typed against
+that JSON contract and are fully bilingual — **Arabic / English with right-to-left**.
 
-```
-                    http://localhost:3000  (public zone, Next.js)
-                    ├── /                      → public map app
-                    ├── /stations/:id          → public station views
-                    └── /dashboard/*  ──rewrite──▶  http://127.0.0.1:3001/dashboard/*
-                                                     (dashboard zone, basePath=/dashboard)
-                                                     └── server-side ▶ Go API :8080
-```
+> The backend API (ingestion, alert engines, database, SSE hub) lives in its own
+> repository/service. These apps only need its base URL.
 
-## Prerequisites
+---
 
-- Node.js ≥ 18.18 (20+ recommended) and npm
-- Go ≥ 1.22
+## Shared stack
 
-## Quick start
+- **Next.js** (App Router, React Server Components) · **React** · **TypeScript** (strict)
+- **Tailwind CSS v4** (CSS-first `@theme` design tokens) · **shadcn/ui** (new-york, on Radix)
+- **Leaflet** for the public map · **recharts** (via shadcn Charts) on the dashboard
+- **Server-Sent Events** consumed via `EventSource` → `router.refresh()` for live updates
+- Lightweight bilingual i18n (EN + AR) with full RTL — no i18n library
+
+---
+
+## Getting started
+
+**Prerequisites:** Node.js ≥ 18.18 (20+ recommended) · npm · a running Mozn backend API.
+
+### Admin dashboard
 
 ```bash
-# 1. install per-app deps (first time only)
-npm --prefix mozn-public/frontend install
-npm --prefix mozn-dashboard/web install
-
-# 2. run everything (Go API + both Next zones), Ctrl-C stops all
-./dev.sh
+cd mozn-dashboard/web
+npm install
+cp .env.example .env.local     # set API_BASE_URL → the backend origin
+npm run dev                    # http://localhost:3000
 ```
 
-Then open **http://localhost:3000** and click **Dashboard** (top-right).
+### Public map app
 
-> First visit to each screen compiles on demand (a few seconds in dev); it's
-> instant afterwards.
+```bash
+cd mozn-public/frontend
+npm install
+cp .env.example .env.local     # set NEXT_PUBLIC_API_BASE → the backend origin
+npm run dev                    # http://localhost:3000 (use a different port if the dashboard is running)
+```
 
-## How the merge works
+> Each app is independent — run whichever you need. Both require the backend API
+> to be reachable to load data. In production they deploy as separate origins
+> (e.g. a `dashboard.` subdomain and the public root domain).
 
-- **`mozn-dashboard/web/next.config.ts`** sets `basePath: "/dashboard"`, so every
-  dashboard page, route handler, and static asset lives under `/dashboard/*`.
-  `basePath` auto-prefixes all `next/link`, router, and asset URLs — no per-link
-  changes were needed. It also re-exposes `NEXT_PUBLIC_BASE_PATH` for the one raw
-  client `fetch()` (`components/layout/command-palette.tsx`) that `basePath` does
-  not auto-prefix.
-- **`mozn-public/frontend/next.config.ts`** rewrites `/dashboard` and
-  `/dashboard/:path*` to the dashboard zone (`DASHBOARD_URL`, default
-  `http://127.0.0.1:3001`). `127.0.0.1` (not `localhost`) avoids an IPv6/`::1`
-  proxy `ECONNRESET` in dev.
-- The **Dashboard button** lives in `mozn-public/frontend/components/ui/top-bar.tsx`
-  as a plain `<a href="/dashboard">` (a hard navigation — cross-zone links must
-  not use `next/link`, which would try to soft-navigate/prefetch a route the
-  public app doesn't have). Labels are in the public i18n dict (`dashboardLink`,
-  EN + AR).
+---
 
-## ⚠️ Do not add a root `package.json` / `package-lock.json`
+## Per-app commands
 
-A lockfile at the repo root makes Next infer the **monorepo** as the workspace
-root and compile over a huge scope — dev cold-compiles balloon from ~2s to ~100s
-per route (which then times out the zone proxy → 500s). Keep dependencies inside
-each app and keep orchestration in `dev.sh`.
+Both apps share the same scripts (run from the app's directory):
 
-## Production notes
+| Script | What it does |
+| --- | --- |
+| `npm run dev` | Dev server |
+| `npm run build` / `npm run start` | Production build / serve |
+| `npm run lint` | ESLint (flat config) |
+| `npm run typecheck` | `tsc --noEmit` *(dashboard)* |
+| `npm run test` | Vitest *(public app)* |
 
-- Build each app: `npm --prefix mozn-dashboard/web run build` and
-  `npm --prefix mozn-public/frontend run build`; build the Go binary with
-  `cd mozn-dashboard/server && go build ./cmd/api`.
-- Run the dashboard zone and set the public app's `DASHBOARD_URL` to its origin;
-  keep the dashboard's `basePath` at `/dashboard`.
-- Each app keeps its own env (`mozn-public/frontend/.env.example`,
-  `mozn-dashboard/web/.env.example`); the Go server reads `PORT` and
-  `ALLOWED_ORIGINS`.
+---
 
-## Running an app on its own
+## Layout
 
-Each app's own `README.md` still describes standalone dev. Note that when run as
-part of the merged stack the dashboard listens on **:3001** under **/dashboard**
-(via `dev.sh`), not on :3000.
+```
+mozn-dashboard/web/          # Admin dashboard (Next.js)
+  app/(dashboard)/           #   screens: overview, alert-inbox, active-alerts,
+                             #   alerts (thresholds), stations, users, history, settings…
+  features/<area>/           #   per-screen components + types
+  components/                #   shared UI, layout shell, maps, providers
+  lib/                       #   server-only API layer (lib/api.ts) + i18n
+
+mozn-public/frontend/        # Public map app (Next.js)
+  app/(app)/                 #   map (/) + station detail (/stations/:id)
+  features/{map,station,alerts}/
+  components/                #   API client, UI, i18n
+```
+
+---
+
+## Configuration
+
+Each app reads its own environment (`.env.local`, gitignored):
+
+| App | Var | Points to |
+| --- | --- | --- |
+| Dashboard | `API_BASE_URL` | Backend origin (server-side fetches) |
+| Public app | `NEXT_PUBLIC_API_BASE` | Backend origin (client + server) |
+
+Each app's own `README.md` covers its specifics. **Always add both `en` and `ar`
+copy** when adding UI text, and use logical Tailwind utilities (`ps/pe/ms/me`,
+`text-start`) so RTL mirrors correctly.

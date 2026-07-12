@@ -31,6 +31,10 @@ export const thresholds: Record<string, Entry> = {
     en: "Calculating impact…",
     ar: "جارٍ حساب الأثر…",
   },
+  "thresholds.impact.noWarning": {
+    en: "Set a Warning threshold to preview impact.",
+    ar: "حدّد حدّ التحذير لمعاينة الأثر.",
+  },
   "thresholds.saveApply": { en: "Save & apply", ar: "حفظ وتطبيق" },
   "thresholds.savedToast": {
     en: "Thresholds saved and applied",
