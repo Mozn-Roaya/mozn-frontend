@@ -26,9 +26,16 @@ export const alertManagement: Record<string, Entry> = {
   // Type
   "alertmgmt.type.compound": { en: "Compound", ar: "مركّب" },
 
+  // Source — how the alert was raised.
+  "alertmgmt.source.observed": { en: "Observed", ar: "رصد" },
+  "alertmgmt.source.forecast": { en: "Forecast", ar: "تنبؤ" },
+  "alertmgmt.source.compound": { en: "Compound", ar: "مركّب" },
+  "alertmgmt.source.manual": { en: "Manual", ar: "يدوي" },
+
   // Columns
   "alertmgmt.col.severity": { en: "Severity", ar: "الخطورة" },
   "alertmgmt.col.type": { en: "Alert", ar: "التنبيه" },
+  "alertmgmt.col.source": { en: "Source", ar: "المصدر" },
   "alertmgmt.col.status": { en: "Status", ar: "الحالة" },
   "alertmgmt.col.action": { en: "Action", ar: "الإجراء" },
 

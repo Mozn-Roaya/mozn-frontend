@@ -6,9 +6,12 @@ import {
   CheckCheck,
   CircleCheck,
   CloudRain,
+  CloudSun,
   Droplets,
+  Gauge,
   Layers,
   type LucideIcon,
+  PenLine,
   Plus,
   RotateCcw,
   SearchX,
@@ -84,6 +87,15 @@ const TYPE_ICON: Record<string, LucideIcon> = {
   water: Droplets,
   temperature: Thermometer,
   compound: Layers,
+};
+
+// How the alert was raised (backend `source`): a live sensor breach, a forecast
+// window, a compound rule, or a manual admin post.
+const SOURCE_ICON: Record<string, LucideIcon> = {
+  observed: Gauge,
+  forecast: CloudSun,
+  compound: Layers,
+  manual: PenLine,
 };
 
 const SEVERITY_RANK: Record<ManagedSeverity, number> = {
@@ -174,7 +186,7 @@ function fmtLead(min: number, locale: string): string {
   return ar ? `خلال ${d} ي` : `in ${d}d`;
 }
 
-type SortKey = "severity" | "type" | "trigger" | "duration" | "status";
+type SortKey = "severity" | "type" | "source" | "trigger" | "duration" | "status";
 
 export function AlertManagementView({ initialAlerts }: { initialAlerts: ManagedAlert[] }) {
   const { t, td, locale } = useLocale();
@@ -356,6 +368,11 @@ export function AlertManagementView({ initialAlerts }: { initialAlerts: ManagedA
     [t],
   );
 
+  const sourceLabel = React.useCallback(
+    (a: ManagedAlert) => t("alertmgmt.source." + a.source),
+    [t],
+  );
+
   // Faceted status filter options with live counts (empty selection = all).
   const statusOptions = React.useMemo(
     () =>
@@ -383,6 +400,7 @@ export function AlertManagementView({ initialAlerts }: { initialAlerts: ManagedA
     const cmp = (a: ManagedAlert, b: ManagedAlert) => {
       switch (sort.key) {
         case "type": return typeLabel(a).localeCompare(typeLabel(b));
+        case "source": return sourceLabel(a).localeCompare(sourceLabel(b));
         case "trigger": return a.trigger.localeCompare(b.trigger);
         case "duration": return a.durationMin - b.durationMin;
         case "status": return STATUS_RANK[a.status] - STATUS_RANK[b.status];
@@ -398,7 +416,7 @@ export function AlertManagementView({ initialAlerts }: { initialAlerts: ManagedA
       }
       return cmp(a, b) * dir;
     });
-  }, [alerts, statuses, query, sort, t, typeLabel]);
+  }, [alerts, statuses, query, sort, t, typeLabel, sourceLabel]);
 
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const allVisibleSelected = rows.length > 0 && rows.every((a) => selected.has(a.id));
@@ -467,6 +485,7 @@ export function AlertManagementView({ initialAlerts }: { initialAlerts: ManagedA
               </TableHead>
               <SortableHead label={t("alertmgmt.col.severity")} column="severity" sort={sort} onSort={onSort} />
               <SortableHead label={t("alertmgmt.col.type")} column="type" sort={sort} onSort={onSort} />
+              <SortableHead label={t("alertmgmt.col.source")} column="source" sort={sort} onSort={onSort} />
               <SortableHead label={t("alertmgmt.trigger")} column="trigger" sort={sort} onSort={onSort} />
               <SortableHead label={t("alertmgmt.timing")} column="duration" sort={sort} onSort={onSort} />
               <SortableHead label={t("alertmgmt.col.status")} column="status" sort={sort} onSort={onSort} />
@@ -476,7 +495,7 @@ export function AlertManagementView({ initialAlerts }: { initialAlerts: ManagedA
           <TableBody>
             {rows.length === 0 ? (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={7} className="h-[240px] p-0">
+                <TableCell colSpan={8} className="h-[240px] p-0">
                   <EmptyState
                     icon={SearchX}
                     title={t("alertmgmt.empty.filteredTitle")}
@@ -494,6 +513,7 @@ export function AlertManagementView({ initialAlerts }: { initialAlerts: ManagedA
             ) : (
               pageRows.map((a) => {
                 const Icon = TYPE_ICON[a.typeKey] ?? TriangleAlert;
+                const SrcIcon = SOURCE_ICON[a.source] ?? Gauge;
                 const resolved = a.status === "resolved";
                 const st = STATUS_STYLE[a.status];
                 const readings = a.readings
@@ -519,6 +539,12 @@ export function AlertManagementView({ initialAlerts }: { initialAlerts: ManagedA
                       <p className="mt-0.5 max-w-[220px] truncate text-xs text-muted-foreground">
                         {t("region." + a.region)} · {a.stations.map(td).join(", ")}
                       </p>
+                    </TableCell>
+                    <TableCell className="align-top">
+                      <div className="flex items-center gap-1.5 text-sm text-foreground">
+                        <SrcIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                        <span>{sourceLabel(a)}</span>
+                      </div>
                     </TableCell>
                     <TableCell className="align-top">
                       <p className="max-w-[380px] text-sm leading-snug text-foreground">{td(a.trigger)}</p>
