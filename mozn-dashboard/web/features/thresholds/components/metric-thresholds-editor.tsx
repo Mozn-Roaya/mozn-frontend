@@ -5,11 +5,14 @@ import { useRouter } from "next/navigation";
 import {
   Check,
   CloudRain,
+  Droplet,
   Droplets,
+  Gauge,
   type LucideIcon,
   Plus,
   Radar,
   SlidersHorizontal,
+  Sun,
   Thermometer,
   Trash2,
   TriangleAlert,
@@ -42,20 +45,27 @@ import {
 } from "@/components/ui/select";
 import { toast } from "@/components/ui/toaster";
 import { paramLabel, paramUnit } from "@/lib/mappers";
-import type {
-  MetricThresholds,
-  ThresholdMetric,
-} from "@/features/thresholds/types";
+import type { MetricThresholds } from "@/features/thresholds/types";
 import type { RegionOption } from "@/types/users";
 import type { WeatherParameter } from "@/types/shared";
 import { TierScaleBar } from "./tier-scale-bar";
 
-const METRIC_ICON: Record<ThresholdMetric, LucideIcon> = {
-  rainfall: CloudRain,
-  wind: Wind,
-  water: Droplets,
-  temperature: Thermometer,
+// Icon per backend parameter — one card per parameter now, so this keys on the
+// raw parameter key rather than the old 4-way metric category. Unknown params
+// (future additions) fall back to a generic slider icon.
+const PARAM_ICON: Record<string, LucideIcon> = {
+  rain_rate_mm: CloudRain,
+  rain_daily_mm: CloudRain,
+  wind_speed_kmh: Wind,
+  wind_gust_kmh: Wind,
+  temp_high_c: Thermometer,
+  temp_low_c: Thermometer,
+  pressure_hpa: Gauge,
+  humidity: Droplets,
+  uv_index: Sun,
+  dewpoint_c: Droplet,
 };
+const iconFor = (param: string): LucideIcon => PARAM_ICON[param] ?? SlidersHorizontal;
 
 const TONE_HEX: Record<string, string> = {
   advisory: "#f59e0b",
@@ -112,9 +122,9 @@ type MetricValues = {
   warning: number;
 };
 
-/** Local edit-state key: region + metric, so the same metric in two regions
- *  doesn't share one value slot. */
-const vkey = (m: { regionId: string; metric: string }) => `${m.regionId}:${m.metric}`;
+/** Local edit-state key: region + parameter, so the same parameter in two
+ *  regions doesn't share one value slot. */
+const vkey = (m: { regionId: string; parameter: string }) => `${m.regionId}:${m.parameter}`;
 
 /** Parse the editable numbers out of a metric's seeded tier strings. */
 function toValues(m: MetricThresholds): MetricValues {
@@ -157,7 +167,8 @@ export function MetricThresholdsEditor({
 
   // Which region's thresholds are shown. Default to the first region with data.
   const [selectedRegion, setSelectedRegion] = React.useState<string>(metrics[0]?.regionId ?? "");
-  const [selected, setSelected] = React.useState<ThresholdMetric>(metrics[0]?.metric);
+  // Selected parameter (card identity).
+  const [selected, setSelected] = React.useState<string>(metrics[0]?.parameter ?? "");
 
   // Metrics for the selected region only — everything below operates on these.
   const regionMetrics = React.useMemo(
@@ -186,10 +197,10 @@ export function MetricThresholdsEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [metricsSig]);
 
-  // Keep the selected metric valid for the current region (the region may not
-  // carry the previously-selected metric). Render-time sync — no effect needed.
-  if (regionMetrics.length > 0 && !regionMetrics.some((m) => m.metric === selected)) {
-    setSelected(regionMetrics[0].metric);
+  // Keep the selected parameter valid for the current region (the region may not
+  // carry the previously-selected parameter). Render-time sync — no effect needed.
+  if (regionMetrics.length > 0 && !regionMetrics.some((m) => m.parameter === selected)) {
+    setSelected(regionMetrics[0].parameter);
   }
 
   // Create-threshold dialog (region + parameter + severity + value, with a
@@ -224,7 +235,7 @@ export function MetricThresholdsEditor({
   // (replaces the old hardcoded-empty impact payload). Debounced + abortable.
   const [footerImpact, setFooterImpact] = React.useState<number | null>(null);
   React.useEffect(() => {
-    const m = regionMetrics.find((mm) => mm.metric === selected) ?? regionMetrics[0];
+    const m = regionMetrics.find((mm) => mm.parameter === selected) ?? regionMetrics[0];
     const warnTier = m?.tiers.find((tr) => tr.name.toLowerCase() === "warning");
     const regionId = m?.regionId ?? "";
     const param = warnTier?.parameter ?? "";
@@ -270,9 +281,12 @@ export function MetricThresholdsEditor({
     );
   }
 
-  const metric = regionMetrics.find((m) => m.metric === selected) ?? regionMetrics[0];
+  const metric = regionMetrics.find((m) => m.parameter === selected) ?? regionMetrics[0];
   if (!metric) return null;
-  // Composite key for this region+metric's local edit state.
+  // Comparator shown to the user: low-side params (temp_low_c) breach BELOW the
+  // cut-off, everything else above. Mirrors isValueBreached in the Go engine.
+  const cmp = metric.isLowSide ? "≤" : "≥";
+  // Composite key for this region+parameter's local edit state.
   const curKey = vkey(metric);
   // Fall back to the metric's server values if the local map hasn't caught up
   // yet (the re-seed effect runs right after, but this render must not crash).
@@ -282,23 +296,27 @@ export function MetricThresholdsEditor({
   const setTier = (tier: Tier, next: number) =>
     setValues((prev) => ({ ...prev, [curKey]: { ...prev[curKey], [tier]: next } }));
 
-  // Monotonic guard against the nearest CONFIGURED lower tier (tiers can be a
-  // partial set — a region/metric may have only some of advisory/watch/warning).
-  const lowerBound = (tier: Tier): number | null => {
+  // Nearest CONFIGURED lower-severity tier value (advisory < watch < warning by
+  // severity). Tiers can be a partial set, so unset neighbours are skipped.
+  const adjacentBound = (tier: Tier): number | null => {
     if (tier === "warning") {
       if (Number.isFinite(v.watch)) return v.watch;
       if (Number.isFinite(v.advisory)) return v.advisory;
       return null;
     }
     if (tier === "watch") return Number.isFinite(v.advisory) ? v.advisory : null;
-    return null; // advisory has nothing below it
+    return null; // advisory has no lower-severity neighbour
   };
+  // High-side params escalate upward (advisory < watch < warning); low-side
+  // params escalate downward (advisory > watch > warning). A tier is invalid if
+  // it doesn't sit on the correct side of its lower-severity neighbour.
   const invalid = (tier: Tier) => {
     const val = v[tier];
     // Unset (NaN) is allowed — the tier just isn't configured for this region.
     if (!Number.isFinite(val)) return false;
-    const lb = lowerBound(tier);
-    return lb !== null && val <= lb;
+    const b = adjacentBound(tier);
+    if (b === null) return false;
+    return metric.isLowSide ? val >= b : val <= b;
   };
 
   // Save each CHANGED tier value via PUT /api/thresholds/:id (each tier carries
@@ -481,7 +499,7 @@ export function MetricThresholdsEditor({
             value={selectedRegion}
             onValueChange={(rid) => {
               setSelectedRegion(rid);
-              const first = metrics.find((m) => m.regionId === rid)?.metric;
+              const first = metrics.find((m) => m.regionId === rid)?.parameter;
               if (first) setSelected(first);
             }}
           >
@@ -507,17 +525,17 @@ export function MetricThresholdsEditor({
           className="flex gap-1 overflow-x-auto border-b border-border-subtle p-2 lg:flex-col lg:border-b-0 lg:border-e"
         >
           {regionMetrics.map((m) => {
-            const Icon = METRIC_ICON[m.metric];
-            const isActive = m.metric === selected;
+            const Icon = iconFor(m.parameter);
+            const isActive = m.parameter === selected;
             const mv = values[vkey(m)] ?? toValues(m);
             return (
               <button
-                key={m.metric}
+                key={m.parameter}
                 type="button"
-                onClick={() => setSelected(m.metric)}
+                onClick={() => setSelected(m.parameter)}
                 aria-current={isActive ? "true" : undefined}
                 aria-label={t("thresholds.editor.selectMetric", {
-                  metric: t(`thresholds.metric.${m.metric}`),
+                  metric: td(m.label),
                 })}
                 className={cn(
                   "group flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 text-start transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:w-full",
@@ -538,10 +556,11 @@ export function MetricThresholdsEditor({
                       isActive ? "font-semibold text-brand-foreground" : "font-medium text-foreground",
                     )}
                   >
-                    {t(`thresholds.metric.${m.metric}`)}
+                    {td(m.label)}
                   </span>
                   <span className="truncate text-xs tabular-nums text-muted-foreground">
-                    {t("severity.warning")} ≥ {Number.isFinite(mv.warning) ? mv.warning : "—"} {td(m.unit)}
+                    {t("severity.warning")} {m.isLowSide ? "≤" : "≥"}{" "}
+                    {Number.isFinite(mv.warning) ? mv.warning : "—"} {td(m.unit)}
                   </span>
                 </span>
               </button>
@@ -553,11 +572,11 @@ export function MetricThresholdsEditor({
         <div className="min-w-0 p-6">
           <div className="flex items-center justify-between gap-3">
             <h3 className="flex flex-wrap items-center gap-2 text-lg font-semibold tracking-tight text-foreground">
-              {React.createElement(METRIC_ICON[metric.metric], {
+              {React.createElement(iconFor(metric.parameter), {
                 className: "size-5 text-muted-foreground",
                 "aria-hidden": true,
               })}
-              {t(`thresholds.metric.${metric.metric}`)}
+              {td(metric.label)}
               {metric.regionName ? (
                 <Badge variant="outline" className="shrink-0 font-medium">
                   {t("region." + metric.regionName)}
@@ -579,23 +598,28 @@ export function MetricThresholdsEditor({
             </div>
           </div>
 
+          {/* Breach-direction hint — the temp_low_c confusion started here. */}
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t(metric.isLowSide ? "thresholds.direction.below" : "thresholds.direction.above")}
+          </p>
+
           {/* Visual escalation bar. */}
           <TierScaleBar
             advisory={Number.isFinite(v.advisory) ? v.advisory : 0}
             watch={Number.isFinite(v.watch) ? v.watch : 0}
             warning={Number.isFinite(v.warning) ? v.warning : 0}
             unit={unit}
+            invert={metric.isLowSide}
           />
 
           {/* Stacked tier inputs — number + unit, inline monotonic validation. */}
           <div className="mt-5 flex flex-col divide-y divide-border-subtle">
             {TIERS.map((tier) => {
-              const lb = lowerBound(tier);
-              // Below-bound is the hard error (red border + hint). An empty field
-              // is allowed while editing — it just disables Save (anyInvalid) and
-              // doesn't flash red mid-typing.
-              const belowBound =
-                Number.isFinite(v[tier]) && lb !== null && v[tier] <= lb;
+              const b = adjacentBound(tier);
+              // Wrong-side of the neighbour is the hard error (red border + hint).
+              // An empty field is allowed while editing — it just disables Save
+              // (anyInvalid) and doesn't flash red mid-typing.
+              const boundBad = invalid(tier);
               const rowId = metric.tiers.find((tr) => tr.name.toLowerCase() === tier)?.id;
               return (
                 <div key={tier} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-3">
@@ -620,17 +644,19 @@ export function MetricThresholdsEditor({
                       onChange={(e) =>
                         setTier(tier, e.target.value === "" ? NaN : Number(e.target.value))
                       }
-                      className={cn("pe-12 tabular-nums", belowBound && "border-status-warning")}
-                      aria-invalid={belowBound}
+                      className={cn("pe-12 tabular-nums", boundBad && "border-status-warning")}
+                      aria-invalid={boundBad}
                     />
                     <span className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">
                       {unit}
                     </span>
                   </div>
-                  {belowBound ? (
+                  {boundBad ? (
                     <span className="flex items-center gap-1 text-xs text-text-warning">
                       <TriangleAlert className="size-3.5 shrink-0" aria-hidden />
-                      {t("thresholds.mustExceed", { prev: `${lb} ${unit}` })}
+                      {t(metric.isLowSide ? "thresholds.mustBeBelow" : "thresholds.mustExceed", {
+                        prev: `${b} ${unit}`,
+                      })}
                     </span>
                   ) : null}
                   {can("thresholds.delete") && rowId ? (
@@ -656,7 +682,7 @@ export function MetricThresholdsEditor({
               <React.Fragment key={tier}>
                 {i > 0 ? <span aria-hidden>·</span> : null}
                 <span className="font-semibold tabular-nums" style={{ color: TONE_HEX[tier] }}>
-                  {t(`severity.${tier}`)} ≥ {Number.isFinite(v[tier]) ? v[tier] : "—"}
+                  {t(`severity.${tier}`)} {cmp} {Number.isFinite(v[tier]) ? v[tier] : "—"}
                 </span>
               </React.Fragment>
             ))}
@@ -908,7 +934,7 @@ export function MetricThresholdsEditor({
                 {pendingDelete
                   ? t("thresholds.delete.desc", {
                       tier: t(`severity.${pendingDelete.tier}`),
-                      metric: t(`thresholds.metric.${metric.metric}`),
+                      metric: td(metric.label),
                     })
                   : ""}
               </DialogDescription>

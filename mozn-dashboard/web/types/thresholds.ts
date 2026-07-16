@@ -35,9 +35,17 @@ export interface ScaleStop {
 }
 
 export interface MetricThresholds {
-  metric: ThresholdMetric;
+  /** Backend parameter key — the card identity. One card per parameter, so
+   *  temp_high_c and temp_low_c (etc.) no longer collapse into one card and
+   *  hide the second parameter's tiers. */
+  parameter: string;
+  /** English display label (from paramLabel); Arabic applied via td() in the UI. */
   label: string;
   unit: string;
+  /** Below-comparison parameter (temp_low_c): breaches when value < cut-off, so
+   *  the editor renders ≤ and inverts the tier ordering. Mirrors isValueBreached
+   *  in the Go engine (services/alert_checker.go). */
+  isLowSide: boolean;
   perStationOverrides: boolean;
   /** Region the thresholds belong to — used for the live impact preview. */
   regionId: string;

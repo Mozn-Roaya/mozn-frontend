@@ -20,7 +20,7 @@ import type {
 import type { AlertHistoryPage, AlertHistoryRow } from "@/types/history";
 import type { ActivityLogPage, ActivityRow, ActivityDayGroup, AuditLogDetail } from "@/types/activity";
 import type { SettingsPage, NotificationPref, ValidationRule } from "@/types/settings";
-import type { ActivityCategory, ThresholdMetric, WeatherParameter } from "@/types/shared";
+import type { ActivityCategory, WeatherParameter } from "@/types/shared";
 import type { RoleMatrix } from "@/types/roles";
 
 import { backendData, backendFetch, backendMutate, getCurrentUser, type MutationResult } from "@/lib/backend";
@@ -476,12 +476,10 @@ export async function getAlertInbox(): Promise<AlertInboxPage> {
 
 // ── Thresholds (A3.0) ────────────────────────────────────────────────────────
 
-const METRIC_LABEL: Record<ThresholdMetric, string> = {
-  rainfall: "Rainfall",
-  wind: "Wind",
-  water: "Water level",
-  temperature: "Temperature",
-};
+// Below-comparison parameters: the alert engine breaches when value < cut-off
+// (services/alert_checker.go isValueBreached). Currently only temp_low_c; kept
+// as a set so adding another low-side metric is a one-line change.
+const LOW_SIDE_PARAMS = new Set<string>(["temp_low_c"]);
 
 export async function getThresholds(): Promise<ThresholdsPage> {
   const locale = await getServerLocale();
@@ -494,24 +492,25 @@ export async function getThresholds(): Promise<ThresholdsPage> {
   const users_ = userNameMap(users);
   const regionName = new Map(regions.map((r) => [r.id, r.name]));
 
-  // Group thresholds by REGION then UI metric, so each metric card belongs to a
-  // single region. Thresholds are keyed per region in the backend; collapsing by
-  // metric alone merged distinct regions' values into one card and hid the region.
-  const byRegionMetric = new Map<string, Map<ThresholdMetric, BackendThreshold[]>>();
+  // Group thresholds by REGION then PARAMETER, so every parameter gets its own
+  // card. Grouping by the 4-way UI category (temperature/wind/rainfall/water)
+  // instead merged distinct parameters — temp_high_c + temp_low_c, rate + daily,
+  // speed + gust — into one card and silently hid the second parameter's tiers
+  // (they were un-viewable, un-editable, and un-deletable). It also dropped any
+  // parameter with no category mapping (uv_index, pressure, humidity, dewpoint)
+  // entirely. Per-parameter grouping surfaces all of them.
+  const byRegionParam = new Map<string, Map<string, BackendThreshold[]>>();
   for (const t of thresholds) {
-    const m = paramToMetric(t.parameter);
-    if (!m) continue;
-    const perMetric = byRegionMetric.get(t.region_id) ?? new Map<ThresholdMetric, BackendThreshold[]>();
-    perMetric.set(m, [...(perMetric.get(m) ?? []), t]);
-    byRegionMetric.set(t.region_id, perMetric);
+    const perParam = byRegionParam.get(t.region_id) ?? new Map<string, BackendThreshold[]>();
+    perParam.set(t.parameter, [...(perParam.get(t.parameter) ?? []), t]);
+    byRegionParam.set(t.region_id, perParam);
   }
 
   const severityRank = (s: string) => (s === "red" ? 3 : s === "orange" ? 2 : 1);
   const metrics: MetricThresholds[] = [];
-  for (const [regionId, byMetric] of byRegionMetric) {
-    for (const [metric, list] of byMetric) {
+  for (const [regionId, byParam] of byRegionParam) {
+    for (const [parameter, list] of byParam) {
       const sorted = [...list].sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
-      const unit = paramUnit(sorted[0]?.parameter ?? "");
       const tiers: ThresholdTier[] = sorted.map((t) => {
         const tier = severityToTier(t.severity);
         return {
@@ -534,9 +533,10 @@ export async function getThresholds(): Promise<ThresholdsPage> {
         ...sorted.map((t) => ({ label: severityToTier(t.severity), value: String(t.value), tone: severityToTier(t.severity) })),
       ];
       metrics.push({
-        metric,
-        label: METRIC_LABEL[metric],
-        unit,
+        parameter,
+        label: paramLabel(parameter),
+        unit: paramUnit(parameter),
+        isLowSide: LOW_SIDE_PARAMS.has(parameter),
         perStationOverrides: false, // backend thresholds are region-level only
         regionId,
         regionName: regionName.get(regionId) ?? "",
@@ -545,6 +545,11 @@ export async function getThresholds(): Promise<ThresholdsPage> {
       });
     }
   }
+  // Deterministic card order (the backend list has no ORDER BY, so raw order is
+  // whatever Postgres returns): by region, then label.
+  metrics.sort(
+    (a, b) => a.regionName.localeCompare(b.regionName) || a.label.localeCompare(b.label),
+  );
 
   const changes: ThresholdChange[] = history.map((h) => {
     const tier = severityToTier(h.severity);

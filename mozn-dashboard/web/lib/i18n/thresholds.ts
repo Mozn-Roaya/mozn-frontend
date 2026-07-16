@@ -116,6 +116,17 @@ export const thresholds: Record<string, Entry> = {
   "thresholds.editor.metricsAria": { en: "Metrics", ar: "المقاييس" },
   "thresholds.editor.selectMetric": { en: "Edit {metric} thresholds", ar: "تعديل حدود {metric}" },
   "thresholds.mustExceed": { en: "Must be above {prev}", ar: "يجب أن تكون أكبر من {prev}" },
+  // Low-side params (temp_low_c) escalate downward: a more severe tier is a LOWER value.
+  "thresholds.mustBeBelow": { en: "Must be below {prev}", ar: "يجب أن تكون أقل من {prev}" },
+  // Per-card hint clarifying the breach direction (the temp_low_c confusion started here).
+  "thresholds.direction.above": {
+    en: "Alerts when the reading rises above the cut-off.",
+    ar: "ينبّه عندما ترتفع القراءة فوق الحد.",
+  },
+  "thresholds.direction.below": {
+    en: "Alerts when the reading falls below the cut-off.",
+    ar: "ينبّه عندما تنخفض القراءة دون الحد.",
+  },
   "thresholds.summaryFrom": { en: "Triggers from", ar: "يبدأ التفعيل من" },
   // Empty state (no metrics returned — replaces the whole editor)
   "thresholds.editor.empty.title": { en: "No threshold metrics yet", ar: "لا توجد مقاييس حدود بعد" },
