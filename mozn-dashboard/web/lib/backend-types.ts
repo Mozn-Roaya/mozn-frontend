@@ -273,6 +273,18 @@ export interface BackendParameter {
   validation?: boolean;
 }
 
+/** Mutually-exclusive operational-status buckets (services.StationStatusCounts),
+ * computed DB-side. Buckets partition total, so the sum of the four station
+ * states + online == total. Drives the dashboard "At a glance" summary. */
+export interface BackendStationStatusCounts {
+  online: number;
+  offline: number;
+  maintenance: number;
+  anomaly: number;
+  warning: number;
+  total: number;
+}
+
 /** GET /api/dashboard/stats (services.DashboardStats). */
 export interface BackendDashboardStats {
   total_stations: number;
@@ -293,6 +305,7 @@ export interface BackendDashboardStats {
   };
   recent_alerts: BackendAlert[];
   station_health: BackendStationHealth[];
+  status_counts: BackendStationStatusCounts;
 }
 
 /** GET /api/readings row (models.WeatherReading). Every measurement is optional
@@ -326,6 +339,7 @@ export interface BackendGovDashboardStats {
   readings_today: number;
   data_quality: number | null;
   recent_alerts: BackendAlert[];
+  status_counts: BackendStationStatusCounts;
 }
 
 export interface BackendStationHealth {

@@ -31,6 +31,7 @@ import type {
   BackendAuditLog,
   BackendDashboardStats,
   BackendGovDashboardStats,
+  BackendStationStatusCounts,
   BackendCompoundRule,
   BackendMunicipality,
   BackendParameter,
@@ -163,7 +164,11 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
   const stationNameAr = new Map(stations.map((s) => [s.id, s.name_ar]));
   const users_ = userNameMap(users);
 
-  const maintenanceCount = stations.filter((s) => s.operational_status === "maintenance").length;
+  // "At a glance" counts come straight from the backend's status_counts — one
+  // DB-side grouped query with the canonical status precedence (see
+  // stationOpStatusSQL). No client re-counting; and because the /stations list
+  // derives per-station status from the SAME rule (mappers.stationOpStatus, kept
+  // in lockstep), every card equals the count you get when you click into it.
 
   // Normalize the primary stats into one shape the builders below consume. The
   // gov endpoint omits station_health + needs_attention, so reconstruct those
@@ -177,6 +182,7 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
     unackAlerts: number;
     offlineAttention: number;
     health: BackendStationHealth[];
+    statusCounts: BackendStationStatusCounts;
   }
   let norm: NormStats;
   if (useGov) {
@@ -202,6 +208,7 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
       unackAlerts: activeAlerts.filter((a) => !a.acknowledged_at && a.status === "pending").length,
       offlineAttention: g.offline_stations,
       health,
+      statusCounts: g.status_counts,
     };
   } else {
     // Fetched above in the batch (no .catch → a failure surfaces as a page error).
@@ -215,14 +222,16 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
       unackAlerts: stats.needs_attention.unacknowledged_alerts,
       offlineAttention: stats.needs_attention.offline_stations,
       health: stats.station_health,
+      statusCounts: stats.status_counts,
     };
   }
 
+  const sc = norm.statusCounts;
   const stats_ = [
-    { id: "online", label: "Stations online", value: norm.activeStations, total: norm.totalStations, tone: "online" as const },
-    { id: "offline", label: "Offline", value: norm.offlineStations, tone: "offline" as const },
-    { id: "maintenance", label: "Maintenance", value: maintenanceCount, tone: "maintenance" as const },
-    { id: "anomaly", label: "Anomaly", value: norm.anomalyStations, tone: "anomaly" as const },
+    { id: "online", label: "Stations online", value: sc.online, total: sc.total, tone: "online" as const },
+    { id: "offline", label: "Offline", value: sc.offline, tone: "offline" as const },
+    { id: "maintenance", label: "Maintenance", value: sc.maintenance, tone: "maintenance" as const },
+    { id: "anomaly", label: "Anomaly", value: sc.anomaly, tone: "anomaly" as const },
     { id: "alerts", label: "Active alerts", value: norm.activeAlerts, tone: "alert" as const },
   ];
 
@@ -331,8 +340,10 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
   return {
     header: {
       title: "System Overview",
-      online: norm.activeStations,
-      total: norm.totalStations,
+      // "reporting" = actually online now (matches the "Stations online" card),
+      // not merely enabled (is_active). Both come from the backend status_counts.
+      online: sc.online,
+      total: sc.total,
       live: true,
     },
     stats: stats_,

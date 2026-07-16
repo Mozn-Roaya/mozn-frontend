@@ -186,31 +186,43 @@ export function municipalityRegionName(
   );
 }
 
-/** Default offline cutoff when a station declares no reporting cadence. */
-const DEFAULT_STALE_MINUTES = 30;
-const STALE_MULTIPLIER = 3;
+// Offline cutoff — MUST mirror the backend's canonical stationOfflineThreshold
+// (mozn-testing/services/public_dashboard_service.go): a station is stale after
+// ~3× its declared report interval, defaulting to 15 min when undeclared, with a
+// 20-min floor (anti-flap). The dashboard summary counts are computed server-side
+// from the same rule (stationOpStatusSQL), so keep these in lockstep — a drift
+// here makes the "At a glance" cards disagree with the /stations list again.
+const OFFLINE_GRACE_FACTOR = 3;
+const DEFAULT_REPORT_INTERVAL_MIN = 15;
+const OFFLINE_FLOOR_MIN = 20;
 
 /**
- * Best-effort online/offline derivation for the admin list (which returns raw
- * stations, unlike the public endpoints' server-derived status). A station is
- * offline when deactivated, inactive, or its last reading is older than a few
- * reporting intervals. Approximates the backend's own freshness rule.
+ * Per-station online/offline derivation for the admin list (which returns raw
+ * stations, unlike the public endpoints' server-derived status). Offline when
+ * deactivated, inactive, no reading yet, or the last reading is older than the
+ * per-station stale cutoff. Mirrors the backend stale rule to the minute.
  */
 export function isStationOnline(s: BackendStation, now: number = Date.now()): boolean {
   if (!s.is_active || s.operational_status === "deactivated") return false;
   if (!s.last_seen_at) return false;
-  const interval = s.report_interval_minutes ?? DEFAULT_STALE_MINUTES;
-  const staleMs = Math.max(interval * STALE_MULTIPLIER, DEFAULT_STALE_MINUTES) * 60_000;
+  const interval = s.report_interval_minutes ?? DEFAULT_REPORT_INTERVAL_MIN;
+  const staleMs = Math.max(interval * OFFLINE_GRACE_FACTOR, OFFLINE_FLOOR_MIN) * 60_000;
   return now - new Date(s.last_seen_at).getTime() <= staleMs;
 }
 
-/** Collapse a raw station's flags into the UI's operational status union. */
+/**
+ * Collapse a raw station's flags into the UI's operational status union.
+ * Precedence — maintenance > offline > anomaly > warning > online — mirrors the
+ * backend stationOpStatusSQL exactly (offline folds in a station reporting empty
+ * data, since there's nothing usable to show), so the /stations list matches the
+ * dashboard's server-computed status_counts.
+ */
 export function stationOpStatus(
   s: BackendStation,
   now: number = Date.now(),
 ): StationOpStatus {
   if (s.operational_status === "maintenance") return "maintenance";
-  if (!isStationOnline(s, now)) return "offline";
+  if (!isStationOnline(s, now) || s.data_status === "empty") return "offline";
   if (s.status === "anomaly") return "anomaly";
   if (s.data_status === "partial") return "warning";
   return "online";

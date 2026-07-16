@@ -29,6 +29,10 @@ function AttentionRow({ item }: { item: AttentionItem }) {
   // label as title and show "<region> · <severity>" as meta. Region/severity/
   // status all resolve through existing dict keys.
   const isOffline = item.severity === "offline";
+  // Offline rows are station-health items, not alerts — send them to the
+  // stations list (filtered to offline, matching the "Offline" summary card),
+  // not the alert inbox where they'd never appear. Alert rows go to the inbox.
+  const href = isOffline ? "/stations?status=offline" : "/alert-inbox";
   const stationDisplay = locale === "ar" ? item.stationNameAr || item.stationName : item.stationName;
   const title =
     isOffline && stationDisplay ? `${stationDisplay} ${t("status.offline")}` : td(item.title);
@@ -45,7 +49,7 @@ function AttentionRow({ item }: { item: AttentionItem }) {
   return (
     <li>
       <Link
-        href="/alert-inbox"
+        href={href}
         className="group -mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-lg px-2 py-2.5 text-start transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <span
