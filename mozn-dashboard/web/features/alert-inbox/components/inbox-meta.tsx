@@ -1,7 +1,11 @@
 import {
   AlertCircle,
   CloudRain,
+  CloudSun,
   Clock,
+  Layers,
+  PenLine,
+  RadioTower,
   ShieldCheck,
   Timer,
   TriangleAlert,
@@ -95,6 +99,43 @@ export const SLA_TONE: Record<
     rank: 2,
   },
 };
+
+/**
+ * Alert-origin badge vocab. forecast is visually distinct (amber) because it's a
+ * PREDICTION, not a live breach; observed reads as a "live" chip; compound/manual
+ * stay neutral. `key` resolves to the localized label (inbox.source.*) at render.
+ * Unknown sources fall back to observed so a row never renders blank.
+ */
+export const SOURCE_META: Record<
+  string,
+  { key: string; icon: LucideIcon; chip: string }
+> = {
+  observed: {
+    key: "observed",
+    icon: RadioTower,
+    chip: "bg-brand-subtle text-brand-foreground ring-1 ring-inset ring-border-subtle",
+  },
+  forecast: {
+    key: "forecast",
+    icon: CloudSun,
+    chip: "bg-status-advisory/10 text-status-advisory ring-1 ring-inset ring-status-advisory/25",
+  },
+  compound: {
+    key: "compound",
+    icon: Layers,
+    chip: "bg-secondary text-muted-foreground ring-1 ring-inset ring-border",
+  },
+  manual: {
+    key: "manual",
+    icon: PenLine,
+    chip: "bg-secondary text-muted-foreground ring-1 ring-inset ring-border",
+  },
+};
+
+/** Look up a source's badge treatment, defaulting to observed for unknowns. */
+export function sourceMeta(source: string) {
+  return SOURCE_META[source] ?? SOURCE_META.observed;
+}
 
 /**
  * Resolve a per-item trend. Uses the backend value when present; otherwise

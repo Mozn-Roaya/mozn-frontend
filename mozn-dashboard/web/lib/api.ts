@@ -456,6 +456,7 @@ export async function getAlertInbox(): Promise<AlertInboxPage> {
       title: paramLabel(a.parameter),
       ...(a.station_id ? { stationId: a.station_id } : {}),
       context: [locale === "ar" ? st?.nameAr || st?.name : st?.name, st?.region, a.source].filter(Boolean).join(" · "),
+      source: a.source,
       timeAgo: relativeTime(a.issued_at, locale),
       issuedAt: a.issued_at,
       ageSeconds: ageSec,

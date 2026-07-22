@@ -42,6 +42,14 @@ export const alertInbox: Record<string, Entry> = {
   "inbox.chip.escalated": { en: "Escalated", ar: "مُصعّد" },
   "inbox.chip.acknowledged": { en: "Acknowledged", ar: "تم الإقرار" },
 
+  // Alert origin badge — is this a live reading or a prediction?
+  "inbox.source.observed": { en: "Live", ar: "مباشر" },
+  "inbox.source.forecast": { en: "Forecast", ar: "متوقّع" },
+  "inbox.source.compound": { en: "Compound", ar: "مركّب" },
+  "inbox.source.manual": { en: "Manual", ar: "يدوي" },
+  // Forecast timing suffix on the alert line, e.g. "for Thu 18:00".
+  "inbox.forecastFor": { en: "for {when}", ar: "لـ {when}" },
+
   // Recommended action label
   "inbox.recommended": { en: "Recommended:", ar: "الإجراء الموصى به:" },
 

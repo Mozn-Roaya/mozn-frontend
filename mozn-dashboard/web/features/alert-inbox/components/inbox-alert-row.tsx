@@ -33,7 +33,7 @@ import {
 import { TableCell, TableRow, tableBodyRowClass } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import type { InboxItem } from "@/features/alert-inbox/types";
-import { parseContext, SEVERITY } from "./inbox-meta";
+import { parseContext, SEVERITY, sourceMeta } from "./inbox-meta";
 import { RelativeTime } from "@/components/common/relative-time";
 
 /** Plain-text tone for the SLA cell — colour is the only urgency cue here. */
@@ -89,6 +89,11 @@ export function InboxAlertRow({
   const ctx = parseContext(td(item.context));
   const primary = item.metrics[0];
   const extra = item.metrics.length - 1;
+  const src = sourceMeta(item.source);
+  const SrcIcon = src.icon;
+  // Forecast alerts carry the predicted window in the meter value ("Thu 18:00");
+  // observed alerts are happening now, so only forecast rows show a "for …" time.
+  const forecastWhen = item.source === "forecast" ? item.meter?.value : undefined;
 
   // Show the acknowledge button / row menu / placeholder based on which of this
   // account's per-action permissions apply to the row's current state.
@@ -137,20 +142,30 @@ export function InboxAlertRow({
           </span>
         </TableCell>
 
-        {/* What + where */}
+        {/* What + where + origin (Live / Forecast / …) */}
         <TableCell>
-          <p className="font-medium text-foreground">
-            {ctx.station}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium text-foreground">{ctx.station}</span>
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                src.chip,
+              )}
+            >
+              <SrcIcon className="size-3" aria-hidden />
+              {t("inbox.source." + src.key)}
+            </span>
             {escalated ? (
-              <span className="ms-2 inline-flex items-center gap-1 align-middle text-[10px] font-semibold uppercase tracking-wide text-status-advisory">
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-status-advisory">
                 <ChevronsUp className="size-3" aria-hidden />
                 {t("inbox.chip.escalated")}
               </span>
             ) : null}
-          </p>
+          </div>
           <p className="mt-0.5 truncate text-xs text-muted-foreground">
             {td(item.title)}
             {ctx.region ? ` · ${t("region." + ctx.region)}` : ""}
+            {forecastWhen ? ` · ${t("inbox.forecastFor", { when: forecastWhen })}` : ""}
           </p>
         </TableCell>
 

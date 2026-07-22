@@ -26,6 +26,10 @@ export interface InboxItem {
   /** Station the alert belongs to — enables the row's "set maintenance" action. */
   stationId?: string;
   context: string;
+  /** Alert origin — "observed" (live station reading), "forecast" (predicted
+   *  hour), "compound" (multi-condition rule), or "manual". Surfaced as a badge
+   *  so operators can tell a live breach from a prediction at a glance. */
+  source: string;
   timeAgo: string;
   /** Raw ISO of when the alert was issued — rendered client-side (RelativeTime). */
   issuedAt: string;
