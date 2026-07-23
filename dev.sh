@@ -5,17 +5,17 @@
 #   ./dev.sh
 #
 # Starts two Next.js processes and stops them all together on Ctrl-C:
-#   • Dashboard (Next):3001   (mozn-dashboard/web, /dashboard) child zone
-#   • Public   (Next) :3000   (mozn-public/frontend, /)        default zone
+#   • Public    (Next) :3000   (mozn-public/frontend)   citizen map app
+#   • Dashboard (Next) :3001   (mozn-dashboard/web)      admin dashboard
 #
-# DATA: the dashboard fetches its data server-side from the REAL Mozn backend at
-# http://localhost:8080 (API_BASE_URL). That backend is a SEPARATE repository —
-# start it there. This script no longer runs a local mock API (the mock
-# mozn-dashboard/server has been removed).
+# DATA: both apps fetch server-side from the REAL Mozn backend at
+# http://localhost:8080 (dashboard: API_BASE_URL; public: NEXT_PUBLIC_API_BASE).
+# That backend is a SEPARATE repository — start it there. This script does not run
+# a local mock API (the old mozn-dashboard/server mock has been removed).
 #
-# The public app proxies /dashboard/* to the dashboard zone (Next.js Multi-Zones),
-# so you only ever open http://localhost:3000 — the "Dashboard" button in the
-# public top-bar takes you to /dashboard.
+# The two apps are INDEPENDENT — there is no Multi-Zones proxy between them. In
+# production they deploy as separate origins (mozn.org.ly and
+# dashboard.mozn.org.ly). Locally, open each on its own port below.
 #
 # IMPORTANT: this repo intentionally has NO root package.json / package-lock.json.
 # A root lockfile makes Next infer the monorepo as the workspace root and compile
@@ -53,8 +53,8 @@ start "$ROOT/mozn-public/frontend"  npm run dev
 cat <<'BANNER'
 
   Mozn frontend is starting up ──────────────────────────────────
-    Public app    →  http://localhost:3000            (open this)
-    Dashboard     →  http://localhost:3000/dashboard  (via the button)
+    Public app    →  http://localhost:3000
+    Dashboard     →  http://localhost:3001
 
     Backend API   →  expected at http://localhost:8080
                      (run the Mozn backend repo separately)

@@ -52,8 +52,8 @@ Mozn early-warning UI: a Next.js dashboard that shows Libyan weather stations on
 
 - **Next.js 16.1.1** (App Router) + **React 19.2**, TypeScript strict
 - **Tailwind CSS v4** via `@tailwindcss/postcss` — design tokens live in `app/globals.css` as CSS variables
-- **Leaflet 1.9** for the map (no react-leaflet — direct Leaflet API)
-- No state library, no UI kit, no test framework wired up
+- **Leaflet 1.9** for the map (no react-leaflet — direct Leaflet API); **recharts** for history charts
+- No state library, no UI kit. **Vitest + Testing Library** wired for unit/characterization tests.
 
 ## Commands
 
@@ -61,6 +61,7 @@ Mozn early-warning UI: a Next.js dashboard that shows Libyan weather stations on
 - `npm run build` — production build (Turbopack is fine here)
 - `npm run start` — serve the production build
 - `npm run lint` — ESLint via flat config (`eslint.config.mjs`)
+- `npm run test` — Vitest (`npm run test:watch` for watch mode)
 - TypeScript: `npx tsc --noEmit` (no script alias)
 
 ## Layout & routing
@@ -69,37 +70,40 @@ The project keeps `app/` and `components/` at the repo root (no `src/`).
 
 ```
 app/
-  layout.tsx                     Root <html>, fonts, metadata
+  layout.tsx                     Root <html lang/dir>, Poppins+Cairo fonts, theme boot script, metadata
   globals.css                    Tailwind v4 + design tokens (CSS vars)
   (app)/                         Route group with the map shell
-    layout.tsx                   Fetches stations, mounts TopBar + MapCanvas + StationsProvider
-    page.tsx                     Empty (map only; no side panel)
+    layout.tsx                   Fetches stations, mounts LanguageProvider + StationsProvider
+                                 + EventsListener + TopBar + MapCanvas
+    page.tsx                     Returns null (intentional — map-only, no side panel; the rail's empty state)
     stations/[stationId]/
       layout.tsx                 Fetches station + renders <StationSidePanel>
       page.tsx                   Overview (TemperatureCard, WeatherMetric, ForecastList, WarningAlert)
       charts/page.tsx            ExpandedPanel (Charts) modal — 2×2 history grid
       data/page.tsx              ExpandedPanel (Data) modal — CSV export form
       share/page.tsx             Share view (in-rail; copy link + embed)
-  api/proxy/[...path]/route.ts   Client-side fetches → upstream API
-  dashboard/page.tsx             Stub (`return null`) — not in use
-  locations/[locationsId]/...    Stub (`return null`) — not in use
+  api/proxy/[...path]/route.ts   Client-side fetches → upstream API (reverse proxy)
+  api/events/route.ts            Same-origin SSE proxy → upstream /public/events
   components/page.tsx            Internal component library / demo page at /components
 ```
-
-Stray files at repo root (`page.html`, `styles.css`) are old snapshots — ignore; don't import from them.
 
 ## API layer (`components/api/`)
 
 - `client.ts` — `apiFetch<T>(path, { query, revalidate, ...init })`. Returns the **unwrapped `data`** from the upstream envelope `{ data, message?, metadata?, code?, error? }`. `apiFetchEnvelope` keeps the envelope (use this when you need `metadata.total` for pagination).
 - **Server-side** fetches hit `https://mozn.org.ly/api` directly (`NEXT_PUBLIC_API_BASE`). **Client-side** fetches go through `/api/proxy/<path>` to dodge mixed-content/CORS. `buildUrl` picks the right one based on `typeof window`.
-- Public endpoints: `/public/stations`, `/public/stations/:id`, `/public/stations/nearest`, `/public/readings`, `/public/readings/history`, `/public/forecasts/daily`, `/public/forecasts`.
+- Public endpoints: `/public/stations`, `/public/stations/:id`, `/public/stations/nearest`, `/public/readings`, `/public/readings/history`, `/public/forecasts/daily`, `/public/alerts` (via `apiFetchEnvelope`; `station_id` filtered client-side), and the `/public/events` SSE stream.
 - The station detail endpoint **omits** `status`/`active_alerts`/`forecast_alerts`. `getStation()` backfills these by calling `listStations()` (Next dedupes via request memoization). Don't rely on those fields existing on the raw detail response.
 - Pass `revalidate` not `cache` — the helper passes it via `next: { revalidate }`. The proxy route is `force-dynamic` and `cache: "no-store"` (client fetches stay fresh).
 - Types live in `components/api/types.ts` — Station, Reading, ReadingHistoryBucket, DailyForecast, Alert, AlertCounts, ForecastAlert, ApiEnvelope, PaginationMeta.
 
 ## State
 
-`components/state/stations-context.tsx` — `StationsProvider` (Client) wraps the (app) layout with the server-fetched station list. `useStations()` reads it from any client component below. Server components fetch their own data directly via `components/api/`.
+`components/state/stations-context.tsx` — `StationsProvider` (Client) wraps the (app) layout with the server-fetched station list. `useStations()` reads it from any client component below. `components/state/lang-context.tsx` — `LanguageProvider` + `useLang()`/`useT()`. Server components fetch their own data directly via `components/api/`.
+
+## Real-time (SSE)
+
+- `app/api/events/route.ts` — same-origin SSE proxy: opens `fetch(${API_BASE}/public/events, { Accept: text/event-stream })` and pipes the stream through (`force-dynamic`, `runtime="nodejs"`, no cache). 502 on upstream failure; client disconnect closes upstream.
+- `components/state/events-listener.tsx` (mounted in the `(app)` layout) — opens an `EventSource("/api/events")`. Handles `alert.*` / `station.*` events: shows a toast (severity-accented, capped at 4, `aria-live="polite"`) and coalesces a ~1s-debounced `router.refresh()` so map pins/panels update live. Reconnects with capped exponential backoff; reads language via refs so a locale toggle relabels future toasts without tearing down the stream.
 
 ## Map (`features/map/`)
 
@@ -109,7 +113,7 @@ Stray files at repo root (`page.html`, `styles.css`) are old snapshots — ignor
 
 ## Features
 
-- `features/station/` — the station detail UI, exported via `features/station/index.ts`: side panel, header, tabs, overview, offline state, weather metrics, forecast list, share tab, `history-chart` (SVG renderer + `seriesConfig`), and the `expanded-panel` / `expanded-charts` / `expanded-data` modal (Figma 232:2 / 268:81) that `/charts` and `/data` route into
+- `features/station/` — the station detail UI, exported via `features/station/index.ts`: side panel, header, tabs, overview, offline state, weather metrics, forecast list, share tab, `history-chart` (**recharts** `AreaChart`/`BarChart` via the shadcn-style `components/ui/chart.tsx` wrapper — not a hand-rolled SVG), plus `csv.ts` (CSV export) and `weather-summary.ts`, and the `expanded-panel` / `expanded-charts` / `expanded-data` modal (Figma 232:2 / 268:81) that `/charts` and `/data` route into (`expanded-charts` refetches history on range change via `/api/proxy/public/readings/history`)
 - `features/alerts/` — `components/warning-alert.tsx` hazard banner (collapsed/expanded) + `lib/` (severity, hazard, defaults), exported via `features/alerts/index.ts`
 
 ## Shared components
@@ -154,7 +158,6 @@ Add a new primitive/scale to `@theme`; add a new per-theme intent to the `:root`
 - **Server vs client fetch base URLs differ.** `apiFetch` from a Server Component bypasses `/api/proxy`. If you add a route handler that itself calls `apiFetch`, it's running server-side too — fetches go straight to upstream.
 - `getStation()` does a second list call to backfill `status` — when adding fields, decide whether they should come from the list endpoint or the detail endpoint and update the merge in `components/api/stations.ts:getStation`.
 - The map's pin HTML is built with `stationIconHtml()` — it's a raw HTML string inserted via Leaflet `divIcon`. Anything dynamic must go through `escapeHtml()`. Don't interpolate untrusted data without escaping.
-- `app/dashboard/`, `app/locations/[locationsId]/`, and the root-level `page.html`/`styles.css` are placeholders/leftovers, not active code paths.
 
 ## Environment
 
