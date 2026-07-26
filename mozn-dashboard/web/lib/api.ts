@@ -150,7 +150,7 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
     loadStationsAll(),
     loadUsersAll(),
     backendData<BackendAlert[]>("/api/alerts?is_active=true&page_size=500").catch(() => [] as BackendAlert[]),
-    backendData<BackendAuditLog[]>("/api/audit-logs?page_size=20").catch(() => [] as BackendAuditLog[]),
+    backendData<BackendAuditLog[]>(`/api/audit-logs?action=${ACTIVITY_ACTION_CSV}&page_size=5`).catch(() => [] as BackendAuditLog[]),
     backendData<BackendAlert[]>(`/api/alerts?from=${trendFrom}&page_size=1000`).catch(() => [] as BackendAlert[]),
     useGov
       ? backendData<BackendGovDashboardStats>("/api/gov/dashboard")
@@ -293,8 +293,9 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
     });
   }
 
+  // Server already restricts to the write/login allowlist (see the fetch above),
+  // so no client-side read-filtering is needed — just take the newest few.
   const recentActivity: ActivityItem[] = audit
-    .filter((l) => l.action !== "view")
     .slice(0, 5)
     .map((l) => {
       const { date, time } = splitDateTime(l.created_at);
@@ -726,6 +727,26 @@ const ACTIVITY_ACTIONS = new Set([
   "modify", "permissions", "register", "regenerate",
   "login",
 ]);
+// CSV form sent to the backend's `action` IN-filter so the read-dominated
+// firehose is narrowed server-side (not fetched then filtered client-side).
+const ACTIVITY_ACTION_CSV = [...ACTIVITY_ACTIONS].join(",");
+
+// Facet values shown in the Activity Log category filter (the fixed universe,
+// not derived from whatever happens to be on the current page).
+const ACTIVITY_CATEGORIES = ["alert", "threshold", "station", "user", "auth"];
+
+// Inverse of `auditCategory`: category → the backend `resource_type` values that
+// map to it, so a category selection becomes a server-side resource_type
+// IN-filter. Values mirror `resourceTypeFromPath` output for each write route
+// (singularized, hyphenated). "station" is the catch-all bucket — its list must
+// track new write resources the same way ACTIVITY_ACTIONS tracks new verbs.
+const CATEGORY_RESOURCE_TYPES: Record<string, string[]> = {
+  auth: ["auth"],
+  threshold: ["threshold", "compound-rule", "validation-rule"],
+  alert: ["alert"],
+  user: ["user", "role"],
+  station: ["station", "municipality", "region", "template", "setting"],
+};
 
 function describeAudit(action: string, resource: string, locale: Locale = "en"): string {
   const res = resource.replace(/-/g, " ");
@@ -759,18 +780,45 @@ function dayLabel(iso: string, now: number = Date.now()): string {
   return d.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
 }
 
-export async function getActivityLog(): Promise<ActivityLogPage> {
+/** Server-side query for the Activity Log — all filtering & pagination happen in
+ *  the backend so the read-dominated audit firehose isn't over-fetched. */
+export interface ActivityLogQuery {
+  page?: number;
+  pageSize?: number;
+  /** Category facet values (see ACTIVITY_CATEGORIES); empty = all. */
+  categories?: string[];
+  /** ISO timestamps for the created_at window (inclusive). */
+  from?: string;
+  to?: string;
+}
+
+export async function getActivityLog(query: ActivityLogQuery = {}): Promise<ActivityLogPage> {
   const locale = await getServerLocale();
-  const [logs, users] = await Promise.all([
-    backendData<BackendAuditLog[]>("/api/audit-logs?page_size=200"),
+  const page = query.page && query.page > 0 ? query.page : 1;
+  const pageSize = query.pageSize && query.pageSize > 0 ? query.pageSize : 25;
+
+  const params = new URLSearchParams();
+  // Always restrict to the write/login allowlist server-side.
+  params.set("action", ACTIVITY_ACTION_CSV);
+  // Category → resource_type IN-filter (empty selection = all categories).
+  const cats = (query.categories ?? []).filter((c) => c in CATEGORY_RESOURCE_TYPES);
+  if (cats.length > 0) {
+    const resourceTypes = [...new Set(cats.flatMap((c) => CATEGORY_RESOURCE_TYPES[c]))];
+    params.set("resource_type", resourceTypes.join(","));
+  }
+  if (query.from) params.set("from", query.from);
+  if (query.to) params.set("to", query.to);
+  params.set("page", String(page));
+  params.set("page_size", String(pageSize));
+
+  const [{ data: logs, meta }, users] = await Promise.all([
+    backendFetch<BackendAuditLog[]>(`/api/audit-logs?${params.toString()}`),
     loadUsersAll(),
   ]);
   const users_ = userNameMap(users);
 
-  const meaningful = logs.filter((l) => ACTIVITY_ACTIONS.has(l.action?.toLowerCase()));
-
   const groupsMap = new Map<string, ActivityDayGroup>();
-  for (const l of meaningful) {
+  for (const l of logs) {
     const { date, time } = splitDateTime(l.created_at);
     const actor = (l.user_id && users_.get(l.user_id)) || "System";
     const row: ActivityRow = {
@@ -787,11 +835,21 @@ export async function getActivityLog(): Promise<ActivityLogPage> {
     groupsMap.set(date, group);
   }
 
+  // Server already orders newest-first; keep the day groups in that order.
   const groups = [...groupsMap.values()].sort((a, b) => (a.date < b.date ? 1 : -1));
-  const actors = [...new Set(meaningful.map((l) => (l.user_id && users_.get(l.user_id)) || "System"))];
-  const categories = [...new Set(meaningful.map((l) => auditCategory(l.resource_type, l.action)))];
+  const actors = [...new Set(logs.map((l) => (l.user_id && users_.get(l.user_id)) || "System"))];
 
-  return { categories, users: actors, groups };
+  return {
+    categories: ACTIVITY_CATEGORIES,
+    users: actors,
+    groups,
+    meta: {
+      page: meta?.page ?? page,
+      pageSize: meta?.page_size ?? pageSize,
+      total: meta?.total ?? logs.length,
+      totalPages: meta?.total_pages ?? 1,
+    },
+  };
 }
 
 /** GET /api/audit-logs/:id — full detail for the activity-log row detail view. */

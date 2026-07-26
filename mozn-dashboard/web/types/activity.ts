@@ -25,10 +25,21 @@ export interface ActivityDayGroup {
   rows: ActivityRow[];
 }
 
+/** Server-side pagination metadata (mirrors the backend `metadata` envelope). */
+export interface ActivityLogMeta {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
 export interface ActivityLogPage {
+  /** All selectable category facet values (not derived from the current page). */
   categories: string[];
   users: string[];
   groups: ActivityDayGroup[];
+  /** Pagination cursor + totals for the current (server-filtered) query. */
+  meta: ActivityLogMeta;
 }
 
 /** Full audit-log entry for the per-row detail view (GET /api/audit-logs/:id). */

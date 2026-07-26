@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Download, Eye, Inbox, SearchX } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -29,13 +30,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { FacetedFilter } from "@/components/data-table/faceted-filter";
 import { SelectionBar } from "@/components/data-table/selection-bar";
 import { PageHeading } from "@/components/common/page-heading";
-import {
-  nextSort,
-  SortableHead,
-  type SortState,
-} from "@/components/data-table/sortable-head";
 import { TablePagination } from "@/components/data-table/table-pagination";
-import { usePagination } from "@/hooks/use-pagination";
 import { DensityToggle, rowPadFor, type Density } from "@/components/data-table/density-toggle";
 import { downloadCsv } from "@/lib/export-csv";
 import { cn } from "@/lib/utils";
@@ -68,16 +63,14 @@ function parseIsoDate(iso: string): Date | undefined {
   return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
 }
 
-const dayKey = (d?: Date) =>
-  d ? `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` : "";
-
 type FlatRow = ActivityRow & { date?: Date };
-
-type SortKey = "actor" | "action" | "category" | "time";
 
 export function ActivityLogView({ page }: { page: ActivityLogPage }) {
   const { locale, t } = useLocale();
   const td = useTD();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   // Localized "10 Jun" with Western digits (matches the rest of the dashboard).
   const fmtDate = React.useCallback(
@@ -91,23 +84,61 @@ export function ActivityLogView({ page }: { page: ActivityLogPage }) {
     [locale],
   );
 
-  // page.categories are lowercase, sentinel-less values (alert/auth/…); the i18n
-  // keys are capitalized ("history.category.Alert"), so map through CATEGORY_LABEL
-  // exactly like the row + export paths do.
   const categoryLabel = (v: string) =>
     t("history.category." + CATEGORY_LABEL[v.toLowerCase() as ActivityCategory]);
-  const [categories, setCategories] = React.useState<string[]>([]);
-  const [query, setQuery] = React.useState("");
-  const [date, setDate] = React.useState<Date | undefined>();
-  // Default to the log's natural newest-first chronological order.
-  const [sort, setSort] = React.useState<SortState<SortKey>>({
-    key: "time",
-    dir: "asc",
-  });
-  const onSort = (key: SortKey) => setSort((prev) => nextSort(prev, key));
 
-  // Flatten the day groups into a single chronological log; carry each row's
-  // derived date so it can be filtered and shown per-row.
+  // ── URL-driven filter state (the server does the filtering + pagination) ────
+  // Category, date, and page all live in the query string; changing them pushes
+  // a new URL, which re-runs the server component and refetches from the backend.
+  const selectedCategories = React.useMemo(
+    () => (searchParams.get("category") ?? "").split(",").filter(Boolean),
+    [searchParams],
+  );
+  const fromParam = searchParams.get("from") ?? undefined;
+  const dateValue = fromParam ? new Date(fromParam) : undefined;
+
+  const setParams = React.useCallback(
+    (updates: Record<string, string | undefined>, resetPage = true) => {
+      const params = new URLSearchParams(searchParams.toString());
+      for (const [k, v] of Object.entries(updates)) {
+        if (v === undefined || v === "") params.delete(k);
+        else params.set(k, v);
+      }
+      if (resetPage) params.delete("page");
+      const qs = params.toString();
+      router.push(qs ? `${pathname}?${qs}` : pathname);
+    },
+    [router, pathname, searchParams],
+  );
+
+  const onCategoryChange = (next: string[]) =>
+    setParams({ category: next.length ? next.join(",") : undefined });
+
+  const onDateChange = (d?: Date) => {
+    if (!d) {
+      setParams({ from: undefined, to: undefined });
+      return;
+    }
+    // Whole-day window in the viewer's local timezone → inclusive ISO bounds.
+    const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+    const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+    setParams({ from: start.toISOString(), to: end.toISOString() });
+  };
+
+  // Faceted category options — the fixed universe from the server, no per-page
+  // counts (those would require aggregating across every page).
+  const categoryOptions = React.useMemo(
+    () =>
+      page.categories.map((v) => ({
+        value: v,
+        label: categoryLabel(v),
+        dot: CATEGORY_DOT[v.toLowerCase() as ActivityCategory],
+      })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [page.categories, locale],
+  );
+
+  // ── Current page's rows (server already filtered + paginated + newest-first) ─
   const allRows = React.useMemo<FlatRow[]>(
     () =>
       page.groups.flatMap((g) => {
@@ -117,69 +148,23 @@ export function ActivityLogView({ page }: { page: ActivityLogPage }) {
     [page.groups],
   );
 
-  // Days that actually have activity — used to disable empty days in the picker.
-  const activeDays = React.useMemo(
-    () => new Set(allRows.map((r) => dayKey(r.date))),
-    [allRows],
-  );
-
-  // Faceted category filter with live counts (empty selection = all).
-  // Date stays a standalone picker; search is its own control.
-  const categoryOptions = React.useMemo(() => {
-    const tally = new Map<string, number>();
-    allRows.forEach((r) => tally.set(r.category, (tally.get(r.category) ?? 0) + 1));
-    return page.categories.map((v) => ({
-      value: v,
-      label: categoryLabel(v),
-      count: tally.get(v.toLowerCase()) ?? 0,
-      dot: CATEGORY_DOT[v.toLowerCase() as ActivityCategory],
-    }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allRows, page.categories]);
-
+  // Free-text search is a client-side refinement over the CURRENT page only
+  // (searching by actor name across all pages would need a users join the audit
+  // table doesn't have).
+  const [query, setQuery] = React.useState("");
   const rows = React.useMemo(() => {
     const q = query.trim().toLowerCase();
-    const dKey = dayKey(date);
-    const filtered = allRows.filter((row) => {
-      const matchesCategory =
-        categories.length === 0 ||
-        categories.some((c) => c.toLowerCase() === row.category);
-      const matchesDate = !date || dayKey(row.date) === dKey;
-      const matchesQuery =
-        q === "" || `${row.actor} ${row.action}`.toLowerCase().includes(q);
-      return matchesCategory && matchesDate && matchesQuery;
-    });
+    if (!q) return allRows;
+    return allRows.filter((row) =>
+      `${td(row.actor)} ${td(row.action)}`.toLowerCase().includes(q),
+    );
+  }, [allRows, query, td]);
 
-    // "time" preserves the seeded newest-first order; the rest sort on the
-    // displayed (translated) value so it matches what the user reads.
-    const indexOf = new Map(allRows.map((r, i) => [r.id, i]));
-    const dir = sort.dir === "asc" ? 1 : -1;
-    const cmp = (a: FlatRow, b: FlatRow) => {
-      switch (sort.key) {
-        case "actor":
-          return td(a.actor).localeCompare(td(b.actor));
-        case "action":
-          return td(a.action).localeCompare(td(b.action));
-        case "category":
-          return t("history.category." + CATEGORY_LABEL[a.category]).localeCompare(
-            t("history.category." + CATEGORY_LABEL[b.category]),
-          );
-        case "time":
-        default:
-          return indexOf.get(a.id)! - indexOf.get(b.id)!;
-      }
-    };
-    return filtered.sort((a, b) => cmp(a, b) * dir);
-  }, [allRows, categories, query, date, sort, td, t]);
-
-  // Distinguish "no rows because filters exclude everything" from "no data at
-  // all" so the empty state can say the right thing (and offer Clear filters).
   const hasFilters =
-    categories.length > 0 || query.trim() !== "" || date !== undefined;
+    selectedCategories.length > 0 || query.trim() !== "" || dateValue !== undefined;
   const clearFilters = () => {
-    setCategories([]);
     setQuery("");
-    setDate(undefined);
+    setParams({ category: undefined, from: undefined, to: undefined });
   };
 
   const [density, setDensity] = React.useState<Density>("comfortable");
@@ -221,28 +206,13 @@ export function ActivityLogView({ page }: { page: ActivityLogPage }) {
       return next;
     });
 
-  // Client-side pagination over the filtered set (shared hook; reset to page 1
-  // when the filters or sort change).
-  const { pageSize, setPageSize, setPageIndex, safePage, pageRows } = usePagination(rows);
-  // Reset to page 1 when the filter set changes — adjusted during render (the
-  // pattern used elsewhere in the app) rather than in an effect, so it commits
-  // once with no flash of the pre-reset page.
-  const [pagedFilters, setPagedFilters] = React.useState({ categories, query, date, sort });
-  if (
-    pagedFilters.categories !== categories ||
-    pagedFilters.query !== query ||
-    pagedFilters.date !== date ||
-    pagedFilters.sort !== sort
-  ) {
-    setPagedFilters({ categories, query, date, sort });
-    setPageIndex(1);
-  }
-
   const handleExport = () => {
     if (rows.length === 0) {
       toast(t("history.export.nothing"), "info");
       return;
     }
+    // Exports the current page (the rows in view); server pagination means the
+    // full set isn't loaded client-side.
     downloadCsv(
       "activity-log",
       [
@@ -283,22 +253,21 @@ export function ActivityLogView({ page }: { page: ActivityLogPage }) {
           />
           <div className="flex flex-wrap items-center gap-2">
             <DatePicker
-              value={date}
-              onChange={setDate}
+              value={dateValue}
+              onChange={onDateChange}
               placeholder={t("history.opt.anyDate")}
               ariaLabel={t("history.filter.byDate")}
-              disabled={(d) => !activeDays.has(dayKey(d))}
             />
             <FacetedFilter
               title={t("history.col.category")}
               options={categoryOptions}
-              selected={categories}
-              onChange={setCategories}
+              selected={selectedCategories}
+              onChange={onCategoryChange}
             />
           </div>
           <div className="flex items-center gap-3 lg:ms-auto">
             <span className="text-sm text-muted-foreground">
-              {t("history.activity.count", { shown: rows.length, total: allRows.length })}
+              {t("history.activity.count", { shown: rows.length, total: page.meta.total })}
             </span>
             <DensityToggle value={density} onChange={setDensity} />
           </div>
@@ -308,17 +277,16 @@ export function ActivityLogView({ page }: { page: ActivityLogPage }) {
 
         <Table containerClassName="max-h-[calc(100vh-320px)] min-h-[280px]">
           <TableHeader>
-            {/* Columns are auto-distributed across the full width (no fixed
-                widths) so they spread evenly like the Users table; only the
-                trailing action column is pinned narrow. */}
+            {/* Newest-first, ordered server-side by created_at — the columns are
+                not client-sortable under server pagination. */}
             <TableRow className={tableHeaderRowClass}>
               <TableHead className="w-10 ps-6">
                 <Checkbox checked={allVisibleSelected ? true : someSelected ? "indeterminate" : false} onCheckedChange={toggleAll} aria-label={t("common.selectAll")} />
               </TableHead>
-              <SortableHead label={t("history.col.actor")} column="actor" sort={sort} onSort={onSort} />
-              <SortableHead label={t("history.col.action")} column="action" sort={sort} onSort={onSort} />
-              <SortableHead label={t("history.col.category")} column="category" sort={sort} onSort={onSort} />
-              <SortableHead label={t("history.col.time")} column="time" sort={sort} onSort={onSort} />
+              <TableHead>{t("history.col.actor")}</TableHead>
+              <TableHead>{t("history.col.action")}</TableHead>
+              <TableHead>{t("history.col.category")}</TableHead>
+              <TableHead>{t("history.col.time")}</TableHead>
               <TableHead className="w-12 text-end" />
             </TableRow>
           </TableHeader>
@@ -349,7 +317,7 @@ export function ActivityLogView({ page }: { page: ActivityLogPage }) {
                 </TableCell>
               </TableRow>
             ) : (
-              pageRows.map((row) => (
+              rows.map((row) => (
                 <TableRow key={row.id} className={cn(tableBodyRowClass, "h-16", rowPad)}>
                   <TableCell className="ps-6" onClick={(e) => e.stopPropagation()}>
                     <Checkbox checked={selected.has(row.id)} onCheckedChange={() => toggleOne(row.id)} aria-label={t("common.selectRow")} />
@@ -396,16 +364,13 @@ export function ActivityLogView({ page }: { page: ActivityLogPage }) {
             )}
           </TableBody>
         </Table>
-        {rows.length > 0 && (
+        {page.meta.total > 0 && (
           <TablePagination
-            page={safePage}
-            pageSize={pageSize}
-            total={rows.length}
-            onPageChange={setPageIndex}
-            onPageSizeChange={(n) => {
-              setPageSize(n);
-              setPageIndex(1);
-            }}
+            page={page.meta.page}
+            pageSize={page.meta.pageSize}
+            total={page.meta.total}
+            onPageChange={(p) => setParams({ page: String(p) }, false)}
+            onPageSizeChange={(n) => setParams({ page_size: String(n) })}
           />
         )}
       </Card>
