@@ -13,6 +13,8 @@ export interface StationRow {
   id: string;
   name: string;
   nameAr: string;
+  /** Weather Underground station id — the real code shown on the summary card. */
+  wuStationId?: string | null;
   region: string;
   /** Owning municipality (city) — drives the per-city emergency contacts editor. */
   municipalityId: string;

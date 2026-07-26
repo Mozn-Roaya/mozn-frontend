@@ -162,6 +162,8 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
   // health rows carry no name_ar; map station id → Arabic name so the map pins +
   // offline feed can localize (they iterate norm.health, which lacks name_ar).
   const stationNameAr = new Map(stations.map((s) => [s.id, s.name_ar]));
+  // Health rows lack wu_station_id — carry it from the full stations list.
+  const stationWuId = new Map(stations.map((s) => [s.id, s.wu_station_id ?? null]));
   const users_ = userNameMap(users);
 
   // "At a glance" counts come straight from the backend's status_counts — one
@@ -251,6 +253,7 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
       id: sh.id,
       name: sh.name,
       nameAr: stationNameAr.get(sh.id) ?? "",
+      wuStationId: stationWuId.get(sh.id) ?? null,
       status: healthStatusToMapStatus(sh.status, sh.is_active, sh.last_seen_at),
       latitude: sh.latitude,
       longitude: sh.longitude,
@@ -293,8 +296,7 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
     });
   }
 
-  // Server already restricts to the write/login allowlist (see the fetch above),
-  // so no client-side read-filtering is needed — just take the newest few.
+  // Server already restricts to the allowlist — just take the newest few.
   const recentActivity: ActivityItem[] = audit
     .slice(0, 5)
     .map((l) => {
@@ -379,6 +381,7 @@ export async function getStations(): Promise<StationsPage> {
     id: s.id,
     name: s.name,
     nameAr: s.name_ar,
+    wuStationId: s.wu_station_id ?? null,
     region: muniRegion.get(s.municipality_id) ?? "—",
     municipalityId: s.municipality_id,
     status: stationOpStatus(s),
@@ -711,15 +714,8 @@ const AUDIT_RESOURCE_AR: Record<string, string> = {
   forecast: "تنبؤ", reading: "قراءة", permission: "صلاحية",
 };
 
-// Actions the Activity Log surfaces — the curated operator trail promised by the
-// page ("configuration changes, account actions, acknowledgements and sign-ins"),
-// NOT a raw request log. We can't just drop `action === "view"`: the backend
-// (middleware/activity.go → actionFromPath) names a GET by its LAST path segment
-// whenever the path has 3+ parts, so reads leak in under non-"view" names —
-// GET /dashboard/stats → "stats" ("Viewed dashboard"), GET /ai/observations →
-// "observations", GET /threshold/history → "history". So we allow-list the
-// state-changing verbs (+ login) instead. Add any new write sub-action here for
-// it to appear in the log.
+// Write/login actions the Activity Log surfaces (allow-list, since GET reads leak
+// in under names like "stats"/"observations"). Add new write verbs here.
 const ACTIVITY_ACTIONS = new Set([
   "create", "update", "delete", "upsert",
   "confirm", "reject", "dismiss",
@@ -727,19 +723,14 @@ const ACTIVITY_ACTIONS = new Set([
   "modify", "permissions", "register", "regenerate",
   "login",
 ]);
-// CSV form sent to the backend's `action` IN-filter so the read-dominated
-// firehose is narrowed server-side (not fetched then filtered client-side).
+// CSV for the backend `action` IN-filter (narrow server-side, not client-side).
 const ACTIVITY_ACTION_CSV = [...ACTIVITY_ACTIONS].join(",");
 
-// Facet values shown in the Activity Log category filter (the fixed universe,
-// not derived from whatever happens to be on the current page).
+// Category facet values (fixed universe, not derived from the current page).
 const ACTIVITY_CATEGORIES = ["alert", "threshold", "station", "user", "auth"];
 
-// Inverse of `auditCategory`: category → the backend `resource_type` values that
-// map to it, so a category selection becomes a server-side resource_type
-// IN-filter. Values mirror `resourceTypeFromPath` output for each write route
-// (singularized, hyphenated). "station" is the catch-all bucket — its list must
-// track new write resources the same way ACTIVITY_ACTIONS tracks new verbs.
+// Category → resource_type values (inverse of auditCategory) for the server
+// IN-filter; "station" is the catch-all — keep its list current.
 const CATEGORY_RESOURCE_TYPES: Record<string, string[]> = {
   auth: ["auth"],
   threshold: ["threshold", "compound-rule", "validation-rule"],
@@ -780,8 +771,7 @@ function dayLabel(iso: string, now: number = Date.now()): string {
   return d.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
 }
 
-/** Server-side query for the Activity Log — all filtering & pagination happen in
- *  the backend so the read-dominated audit firehose isn't over-fetched. */
+/** Server-side filter + pagination params for the Activity Log. */
 export interface ActivityLogQuery {
   page?: number;
   pageSize?: number;

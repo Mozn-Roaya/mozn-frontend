@@ -56,6 +56,8 @@ export interface MapStation {
   name: string;
   /** Arabic station name; the map pin/summary card use it when locale==='ar'. */
   nameAr?: string;
+  /** Weather Underground station id — the real code shown on the summary card. */
+  wuStationId?: string | null;
   status: StationStatus;
   /** Real WGS84 coordinates, plotted directly on the Leaflet basemap. */
   latitude: number;

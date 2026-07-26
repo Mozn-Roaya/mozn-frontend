@@ -75,12 +75,6 @@ export interface StationFormInitial {
 
 const CONTACTS_API_BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
-function hashCode(s: string): string {
-  let h = 0;
-  for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return `MZN-${String((h % 9000) + 1000)}`;
-}
-
 export function StationForm({
   mode,
   regions,
@@ -215,10 +209,9 @@ export function StationForm({
   const inLibya = hasCoords && isInLibya(lat, lng);
   const coordsInvalid = hasCoords && !inLibya;
 
-  // The station's real id is the backend-generated UUID (present only in edit
-  // mode). `previewCode` is a short cosmetic code for the public-preview card.
+  // stationRecordId = backend UUID (edit mode only); previewCode = entered WU id.
   const stationRecordId = initial?.id ?? "";
-  const previewCode = initial?.code ?? hashCode(form.name || "new");
+  const previewCode = form.wuStationId.trim() ? `#${form.wuStationId.trim()}` : "";
   const selectedSensors = SENSORS.filter((s) => form.sensors[s]);
   const canSave =
     form.name.trim() !== "" &&

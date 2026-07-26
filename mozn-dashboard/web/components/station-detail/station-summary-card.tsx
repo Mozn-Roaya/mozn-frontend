@@ -506,7 +506,9 @@ export function StationSummaryCard({
           <h3 className="mt-0.5 truncate text-2xl font-bold leading-9 text-foreground" dir="auto">
             {displayName}
           </h3>
-          <p className="text-sm tabular-nums text-muted-foreground">{detail.code}</p>
+          {detail.code ? (
+            <p className="text-sm tabular-nums text-muted-foreground">{detail.code}</p>
+          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <button

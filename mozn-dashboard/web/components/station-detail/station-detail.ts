@@ -43,15 +43,10 @@ export interface StationDetail {
   forecast?: ForecastDay[];
 }
 
-function hash(s: string): number {
-  let h = 0;
-  for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return h;
-}
-
-/** Stable display id derived from the station's real id, e.g. "#0002". */
-function code(id: string): string {
-  return `#${String((hash(id) % 8999) + 1000)}`;
+/** Real WU station id as a display code (e.g. "#ITRIPOLI12"); empty when none. */
+function wuCode(wuStationId?: string | null): string {
+  const id = wuStationId?.trim();
+  return id ? `#${id}` : "";
 }
 
 /** Build a detail from an overview map station. */
@@ -59,7 +54,7 @@ export function detailFromMapStation(s: MapStation): StationDetail {
   return {
     name: s.name,
     nameAr: s.nameAr,
-    code: code(s.id),
+    code: wuCode(s.wuStationId),
     region: s.region,
     city: s.name.split(/\s+/)[0],
     availability: s.status === "offline" ? "offline" : "live",
@@ -75,7 +70,7 @@ export function detailFromStationRow(r: StationRow): StationDetail {
   return {
     name: r.name,
     nameAr: r.nameAr,
-    code: code(r.id),
+    code: wuCode(r.wuStationId),
     region: r.region,
     city: r.name.split(/\s+/)[0],
     availability,

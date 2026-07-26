@@ -87,9 +87,8 @@ export function ActivityLogView({ page }: { page: ActivityLogPage }) {
   const categoryLabel = (v: string) =>
     t("history.category." + CATEGORY_LABEL[v.toLowerCase() as ActivityCategory]);
 
-  // ── URL-driven filter state (the server does the filtering + pagination) ────
-  // Category, date, and page all live in the query string; changing them pushes
-  // a new URL, which re-runs the server component and refetches from the backend.
+  // URL-driven filter state: category/date/page live in the query string;
+  // changing them pushes a new URL and refetches server-side.
   const selectedCategories = React.useMemo(
     () => (searchParams.get("category") ?? "").split(",").filter(Boolean),
     [searchParams],
@@ -125,8 +124,7 @@ export function ActivityLogView({ page }: { page: ActivityLogPage }) {
     setParams({ from: start.toISOString(), to: end.toISOString() });
   };
 
-  // Faceted category options — the fixed universe from the server, no per-page
-  // counts (those would require aggregating across every page).
+  // Category facet options — fixed universe, no per-page counts.
   const categoryOptions = React.useMemo(
     () =>
       page.categories.map((v) => ({
@@ -138,7 +136,7 @@ export function ActivityLogView({ page }: { page: ActivityLogPage }) {
     [page.categories, locale],
   );
 
-  // ── Current page's rows (server already filtered + paginated + newest-first) ─
+  // Current page's rows (server already filtered + paginated + newest-first).
   const allRows = React.useMemo<FlatRow[]>(
     () =>
       page.groups.flatMap((g) => {
@@ -148,9 +146,7 @@ export function ActivityLogView({ page }: { page: ActivityLogPage }) {
     [page.groups],
   );
 
-  // Free-text search is a client-side refinement over the CURRENT page only
-  // (searching by actor name across all pages would need a users join the audit
-  // table doesn't have).
+  // Free-text search refines the current page only (no cross-page name search).
   const [query, setQuery] = React.useState("");
   const rows = React.useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -211,8 +207,7 @@ export function ActivityLogView({ page }: { page: ActivityLogPage }) {
       toast(t("history.export.nothing"), "info");
       return;
     }
-    // Exports the current page (the rows in view); server pagination means the
-    // full set isn't loaded client-side.
+    // Exports the current page only (server pagination doesn't load the full set).
     downloadCsv(
       "activity-log",
       [
@@ -277,8 +272,7 @@ export function ActivityLogView({ page }: { page: ActivityLogPage }) {
 
         <Table containerClassName="max-h-[calc(100vh-320px)] min-h-[280px]">
           <TableHeader>
-            {/* Newest-first, ordered server-side by created_at — the columns are
-                not client-sortable under server pagination. */}
+            {/* Newest-first (server-ordered); columns aren't client-sortable. */}
             <TableRow className={tableHeaderRowClass}>
               <TableHead className="w-10 ps-6">
                 <Checkbox checked={allVisibleSelected ? true : someSelected ? "indeterminate" : false} onCheckedChange={toggleAll} aria-label={t("common.selectAll")} />

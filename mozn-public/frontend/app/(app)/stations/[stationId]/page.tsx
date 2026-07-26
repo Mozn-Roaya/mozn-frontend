@@ -35,10 +35,7 @@ export default async function StationOverviewPage({
   if (!station) notFound();
 
   if (station.status === "offline") {
-    // The station isn't reporting live readings, but the daily forecast is
-    // model-generated on a separate endpoint and stays meaningful — so show it
-    // beneath the offline notice instead of leaving the panel empty. ForecastList
-    // renders its own "no forecast" state if the backend has none.
+    // Forecast is model-generated (separate endpoint), so show it even when offline.
     const forecast = await getDailyForecast(decodedId, 3).catch(() => []);
     return (
       <div className="flex flex-col gap-[24px] w-full">
