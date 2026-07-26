@@ -710,6 +710,23 @@ const AUDIT_RESOURCE_AR: Record<string, string> = {
   forecast: "تنبؤ", reading: "قراءة", permission: "صلاحية",
 };
 
+// Actions the Activity Log surfaces — the curated operator trail promised by the
+// page ("configuration changes, account actions, acknowledgements and sign-ins"),
+// NOT a raw request log. We can't just drop `action === "view"`: the backend
+// (middleware/activity.go → actionFromPath) names a GET by its LAST path segment
+// whenever the path has 3+ parts, so reads leak in under non-"view" names —
+// GET /dashboard/stats → "stats" ("Viewed dashboard"), GET /ai/observations →
+// "observations", GET /threshold/history → "history". So we allow-list the
+// state-changing verbs (+ login) instead. Add any new write sub-action here for
+// it to appear in the log.
+const ACTIVITY_ACTIONS = new Set([
+  "create", "update", "delete", "upsert",
+  "confirm", "reject", "dismiss",
+  "acknowledge", "unacknowledge", "escalate", "revert", "reopen", "resolve",
+  "modify", "permissions", "register", "regenerate",
+  "login",
+]);
+
 function describeAudit(action: string, resource: string, locale: Locale = "en"): string {
   const res = resource.replace(/-/g, " ");
   if (action === "login") return locale === "ar" ? "تسجيل الدخول" : "Signed in";
@@ -750,7 +767,7 @@ export async function getActivityLog(): Promise<ActivityLogPage> {
   ]);
   const users_ = userNameMap(users);
 
-  const meaningful = logs.filter((l) => l.action !== "view");
+  const meaningful = logs.filter((l) => ACTIVITY_ACTIONS.has(l.action?.toLowerCase()));
 
   const groupsMap = new Map<string, ActivityDayGroup>();
   for (const l of meaningful) {

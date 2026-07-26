@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
-import { StationOverview, StationOffline } from "@/features/station";
+import { stationName } from "@/components/lib/i18n";
+import { StationOverview, StationOffline, ForecastList } from "@/features/station";
 
 import { listAlerts } from "../../../../components/api/alerts";
 import { getDailyForecast } from "../../../../components/api/forecasts";
@@ -34,7 +35,22 @@ export default async function StationOverviewPage({
   if (!station) notFound();
 
   if (station.status === "offline") {
-    return <StationOffline station={station} lang={lang} />;
+    // The station isn't reporting live readings, but the daily forecast is
+    // model-generated on a separate endpoint and stays meaningful — so show it
+    // beneath the offline notice instead of leaving the panel empty. ForecastList
+    // renders its own "no forecast" state if the backend has none.
+    const forecast = await getDailyForecast(decodedId, 3).catch(() => []);
+    return (
+      <div className="flex flex-col gap-[24px] w-full">
+        <StationOffline station={station} lang={lang} />
+        <ForecastList
+          subtitle={stationName(station, lang)}
+          days={forecast}
+          lang={lang}
+          className="!w-full"
+        />
+      </div>
+    );
   }
 
   const [reading, forecast, alertsEnvelope] = await Promise.all([
