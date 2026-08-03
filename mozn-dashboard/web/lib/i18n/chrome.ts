@@ -139,6 +139,8 @@ export const chrome: Record<string, Entry> = {
   "status.maintenance": { en: "Maintenance", ar: "صيانة" },
   "status.anomaly": { en: "Anomaly", ar: "خلل" },
   "status.warning": { en: "Warning", ar: "تحذير" },
+  // Map-legend only — the yellow alert tier, not a backend station status.
+  "status.advisory": { en: "Advisory", ar: "تنبيه" },
 
   // Alert severity
   "severity.critical": { en: "Critical", ar: "حرج" },

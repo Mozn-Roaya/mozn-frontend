@@ -61,6 +61,7 @@ const EN = {
   locating: "Locating…",
   stationsNearMe: "Stations near me",
   legendNormal: "Normal",
+  legendAdvisory: "Advisory",
   legendWarning: "Warning",
   legendOffline: "Offline",
   // QA: pluralize so a single station reads "1 station", not "1 stations".
@@ -282,6 +283,7 @@ const AR: Dict = {
   locating: "جارٍ تحديد الموقع…",
   stationsNearMe: "المحطات القريبة مني",
   legendNormal: "طبيعي",
+  legendAdvisory: "تنبيه",
   legendWarning: "تحذير",
   legendOffline: "غير متصل",
   stationsCount: (n: number) => `${n} محطة`,

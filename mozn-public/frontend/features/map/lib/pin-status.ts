@@ -40,6 +40,28 @@ export const SEVERITY_COLOR: Readonly<Record<ApiSeverity, string>> = {
 /** Halo opacity for both the React pin and the Leaflet divIcon halo. */
 export const PIN_HALO_OPACITY = 0.2;
 
+/** The keys shown on the map legend, in the order they read (escalating). */
+export type LegendKey = "normal" | "advisory" | "warning" | "offline";
+
+/**
+ * Legend swatches. Deliberately NOT a 1:1 colour match with pins — the legend
+ * is a coarse grouping key, so the six pin kinds collapse into four entries:
+ *
+ *   normal   → normal pins
+ *   advisory → yellow-tier alert pins
+ *   warning  → orange- and red-tier alert pins
+ *   offline  → offline and maintenance pins
+ *
+ * Advisory borrows the orange severity hue rather than `--color-status-advisory-500`
+ * so the key reads green → orange → red → grey as a single escalation ramp.
+ */
+export const LEGEND_COLOR: Readonly<Record<LegendKey, string>> = {
+  normal: "var(--color-status-normal-500)",
+  advisory: "var(--color-severity-orange-500)",
+  warning: "var(--color-status-warning-500)",
+  offline: "var(--color-status-offline-400)",
+};
+
 /**
  * Resolve what a station's pin should communicate. Priority:
  *   red > orange > yellow > offline > normal

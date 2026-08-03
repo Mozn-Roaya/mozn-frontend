@@ -3,23 +3,26 @@
 import { cn } from "@/components/lib/cn";
 import { useT } from "@/components/state/lang-context";
 
-import { pinColorFor, type PinKind } from "../lib/pin-status";
+import { LEGEND_COLOR, type LegendKey } from "../lib/pin-status";
 
 type MapPinLegendProps = {
   readonly className?: string;
 };
 
 /**
- * The three-status key from the Figma design system (Map Pin / Legend
- * 386:17): Normal · Warning · Offline. Colours bind to the same semantic
- * tokens as the pins, so the key stays in sync across light/dark. Active
- * alerts still colour individual pins by finer severity (yellow/orange/red)
- * via `pinKindFor`; the legend groups those under "Warning".
+ * The status key over the map, extending the Figma design system's three-status
+ * legend (Map Pin / Legend 386:17): Normal · Advisory · Warning · Offline.
+ * Colours bind to semantic tokens, so the key stays in sync across light/dark.
+ *
+ * Active alerts still colour individual pins by finer severity
+ * (yellow/orange/red) via `pinKindFor`; the legend groups those — the yellow
+ * tier reads as "Advisory", orange and red as "Warning". See `LEGEND_COLOR`.
  */
 export function MapPinLegend({ className }: MapPinLegendProps) {
   const t = useT();
-  const items: ReadonlyArray<{ kind: PinKind; label: string }> = [
+  const items: ReadonlyArray<{ kind: LegendKey; label: string }> = [
     { kind: "normal", label: t.legendNormal },
+    { kind: "advisory", label: t.legendAdvisory },
     { kind: "warning", label: t.legendWarning },
     { kind: "offline", label: t.legendOffline },
   ];
@@ -36,7 +39,7 @@ export function MapPinLegend({ className }: MapPinLegendProps) {
         <div key={item.kind} className="inline-flex items-center gap-[8px]">
           <span
             className="size-[8px] md:size-[10px] lg:size-[12px] rounded-full"
-            style={{ backgroundColor: pinColorFor(item.kind) }}
+            style={{ backgroundColor: LEGEND_COLOR[item.kind] }}
           />
           <span className="text-body-xs lg:text-body-sm font-medium text-(--color-text-primary)">
             {item.label}

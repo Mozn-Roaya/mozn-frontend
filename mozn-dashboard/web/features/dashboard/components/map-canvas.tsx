@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { useLocale, useT } from "@/components/providers/locale-provider";
 import { EmptyState } from "@/components/common/empty-state";
 import type { MapStation } from "@/features/dashboard/types";
-import { STATION_STATUS } from "../lib/status";
+import { MAP_LEGEND } from "../lib/status";
 
 import type { LeafletLibyaMapHandle } from "@/components/maps/leaflet-libya-map";
 import type { MapTheme, PinKind } from "@/components/maps/leaflet-config";
@@ -119,15 +119,16 @@ export function MapCanvas({ stations }: { stations: MapStation[] }) {
         </MapControlButton>
       </div>
 
-      {/* Status legend — floating chip at the bottom-start. */}
-      <div className="pointer-events-none absolute bottom-4 start-4 z-[1000] flex items-center gap-4 rounded-xl border border-border bg-card/90 px-4 py-2.5 shadow-card backdrop-blur">
-        {(["online", "warning", "offline"] as const).map((key) => (
+      {/* Status legend — floating chip at the bottom-start. Wraps rather than
+          overflowing once the map is narrow. */}
+      <div className="pointer-events-none absolute bottom-4 start-4 z-[1000] flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-xl border border-border bg-card/90 px-4 py-2.5 shadow-card backdrop-blur">
+        {MAP_LEGEND.map((item) => (
           <span
-            key={key}
+            key={item.key}
             className="flex items-center gap-1.5 text-xs font-medium text-foreground"
           >
-            <span className={cn("size-2 rounded-full", STATION_STATUS[key].dotClass)} />
-            {pinLabels[key]}
+            <span className={cn("size-2 rounded-full", item.dotClass)} />
+            {t(item.labelKey)}
           </span>
         ))}
       </div>
