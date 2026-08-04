@@ -253,25 +253,6 @@ export const LeafletLibyaMap = React.forwardRef<
     () => ({
       zoomIn: () => mapRef.current?.zoomIn(ZOOM_STEP),
       zoomOut: () => mapRef.current?.zoomOut(ZOOM_STEP),
-      recenter: () => {
-        const map = mapRef.current;
-        if (!map) return;
-        const selected = selectedStationId
-          ? stations.find((s) => s.id === selectedStationId)
-          : undefined;
-        if (selected) {
-          map.flyTo(
-            [selected.latitude, selected.longitude],
-            STATION_ZOOM,
-            FLY_OPTIONS,
-          );
-          return;
-        }
-        map.flyToBounds(LIBYA_BOUNDS, {
-          ...FIT_BOUNDS_OPTIONS,
-          ...FLY_OPTIONS,
-        });
-      },
       flyToBounds: (points) => {
         const map = mapRef.current;
         if (!map || points.length === 0) return;
@@ -281,7 +262,9 @@ export const LeafletLibyaMap = React.forwardRef<
         map.flyToBounds(bounds, { ...FIT_BOUNDS_OPTIONS, ...FLY_OPTIONS });
       },
     }),
-    [selectedStationId, stations],
+    // No deps: every method now reads only `mapRef`, so the handle no longer
+    // needs re-creating when the selection or the stations array changes.
+    [],
   );
 
   return <div ref={containerRef} className="absolute inset-0 z-0" />;

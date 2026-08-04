@@ -8,30 +8,30 @@ import { IconButton } from "@/components/ui/icon-button";
 
 type MapControlsProps = {
   readonly showLabels: boolean;
-  readonly recenterLabel: string;
   readonly hideOnMobile: boolean;
   readonly isLocating: boolean;
   readonly onZoomIn: () => void;
   readonly onZoomOut: () => void;
-  readonly onRecenter: () => void;
   readonly onToggleLabels: () => void;
   readonly onLocate: () => void;
 };
 
 /**
- * Floating stack of map control buttons (zoom in / out, recenter, label
- * toggle, and "Stations near me"). Side-effect-free — all interactions are
- * passed in as `on*` props. `geolocationSupported` resolves once on mount to
- * avoid an SSR/CSR mismatch on the `disabled` attribute.
+ * Floating stack of map control buttons (zoom in / out, label toggle, and
+ * "Stations near me"). Side-effect-free — all interactions are passed in as
+ * `on*` props. `geolocationSupported` resolves once on mount to avoid an
+ * SSR/CSR mismatch on the `disabled` attribute.
+ *
+ * There is no recenter/reset-view button: the camera already follows selection
+ * on its own (see the selection effect in `leaflet-libya-map.tsx`), so the
+ * control was redundant.
  */
 export function MapControls({
   showLabels,
-  recenterLabel,
   hideOnMobile,
   isLocating,
   onZoomIn,
   onZoomOut,
-  onRecenter,
   onToggleLabels,
   onLocate,
 }: MapControlsProps) {
@@ -52,7 +52,6 @@ export function MapControls({
     >
       <IconButton icon="plus" label={t.zoomIn} onClick={onZoomIn} />
       <IconButton icon="minus" label={t.zoomOut} onClick={onZoomOut} />
-      <IconButton icon="map-pin" label={recenterLabel} onClick={onRecenter} />
       <IconButton
         icon="layers"
         label={showLabels ? t.hideLabels : t.showLabels}

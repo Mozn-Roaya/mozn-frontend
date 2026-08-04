@@ -52,8 +52,6 @@ const EN = {
 
   // Map
   loadingMap: "Loading map…",
-  resetView: "Reset view",
-  recenterOn: (name: string) => `Recenter on ${name}`,
   zoomIn: "Zoom in",
   zoomOut: "Zoom out",
   hideLabels: "Hide station labels",
@@ -61,6 +59,9 @@ const EN = {
   locating: "Locating…",
   stationsNearMe: "Stations near me",
   legendNormal: "Normal",
+  // Same word as `pinWatch` on purpose — the legend key and the pin label must
+  // name the yellow tier identically.
+  legendWatch: "Watch",
   legendAdvisory: "Advisory",
   legendWarning: "Warning",
   legendOffline: "Offline",
@@ -151,6 +152,14 @@ const EN = {
   offlineBody:
     "We can’t reach this station right now, so live readings, history, and forecasts aren’t available.",
   lastSeen: "Last seen",
+
+  // Estimated (offline fallback) state. The note has to do real work: it is the
+  // only thing standing between an estimate and a reader who assumes the
+  // station reported these numbers itself.
+  estimatedBadge: "Estimated",
+  offlineEstimateNote:
+    "Readings below are estimated for this station’s location from an outside source — not measurements from this station.",
+  estimateSource: (time: string) => `Source: Open-Meteo · updated ${time}`,
 
   // Alerts
   hazardHighTemp: "High Temperature",
@@ -274,8 +283,6 @@ const AR: Dict = {
 
   // Map
   loadingMap: "جارٍ تحميل الخريطة…",
-  resetView: "إعادة الضبط",
-  recenterOn: (name: string) => `توسيط على ${name}`,
   zoomIn: "تكبير",
   zoomOut: "تصغير",
   hideLabels: "إخفاء أسماء المحطات",
@@ -283,6 +290,7 @@ const AR: Dict = {
   locating: "جارٍ تحديد الموقع…",
   stationsNearMe: "المحطات القريبة مني",
   legendNormal: "طبيعي",
+  legendWatch: "ترقب",
   legendAdvisory: "تنبيه",
   legendWarning: "تحذير",
   legendOffline: "غير متصل",
@@ -365,6 +373,12 @@ const AR: Dict = {
   offlineBody:
     "تعذّر الوصول إلى هذه المحطة حالياً، لذا فإن القراءات الحية والسجل والتوقعات غير متوفرة.",
   lastSeen: "آخر ظهور",
+
+  // Estimated (offline fallback) state
+  estimatedBadge: "تقديري",
+  offlineEstimateNote:
+    "القراءات أدناه تقديرية لموقع المحطة من مصدر خارجي، وليست قراءات من هذه المحطة.",
+  estimateSource: (time: string) => `المصدر: Open-Meteo · محدّث ${time}`,
 
   // Alerts
   hazardHighTemp: "درجة حرارة مرتفعة",

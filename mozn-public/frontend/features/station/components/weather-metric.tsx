@@ -10,6 +10,8 @@ import {
 import { cn } from "@/components/lib/cn";
 import { getDict, type Lang } from "@/components/lib/i18n";
 
+import { ValueBadge } from "./value-badge";
+
 export type WeatherMetricType = "rainfall" | "wind" | "humidity" | "pressure";
 
 const iconByType: Record<WeatherMetricType, React.ComponentType<IconProps>> = {
@@ -71,6 +73,12 @@ type WeatherMetricProps = {
   unit: string;
   description: string;
   direction?: CompassProps["direction"];
+  /**
+   * Optional qualifier pill beside the title — used to mark the value as an
+   * estimate on offline stations. A single tile is screenshot-able on its own,
+   * so the mark lives on the tile rather than only in the panel's banner.
+   */
+  badge?: string;
   className?: string;
   lang?: Lang;
 };
@@ -82,6 +90,7 @@ export function WeatherMetric({
   unit,
   description,
   direction,
+  badge,
   className,
   lang = "en",
 }: WeatherMetricProps) {
@@ -97,11 +106,19 @@ export function WeatherMetric({
         className,
       )}
     >
-      <div className="flex items-center gap-[8px]">
+      {/* Wraps so a badge can't push the title past the tile's edge; the wind
+          tile also reserves room for the compass overlay pinned to its end. */}
+      <div
+        className={cn(
+          "flex flex-wrap items-center gap-[8px]",
+          showCompass && badge && "pe-[34px]",
+        )}
+      >
         <Icon size={16} className="text-(--color-text-secondary)" />
         <span className="text-body-xs font-medium text-(--color-text-muted) whitespace-nowrap">
           {title}
         </span>
+        {badge && <ValueBadge label={badge} />}
       </div>
       <div className="flex items-baseline gap-[4px] whitespace-nowrap">
         <span className="text-heading-lg font-semibold text-(--color-text-primary)">

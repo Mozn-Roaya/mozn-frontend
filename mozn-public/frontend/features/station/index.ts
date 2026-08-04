@@ -2,6 +2,7 @@ export { StationSidePanel } from "./components/station-side-panel";
 export { StationHeader } from "./components/station-header";
 export { StationOverview } from "./components/station-overview";
 export { StationOffline } from "./components/station-offline";
+export { StationEstimated } from "./components/station-estimated";
 export { TemperatureCard } from "./components/temperature-card";
 export { WeatherMetric } from "./components/weather-metric";
 export { ForecastList } from "./components/forecast-list";

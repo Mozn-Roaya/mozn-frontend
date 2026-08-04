@@ -11,17 +11,19 @@ type MapPinLegendProps = {
 
 /**
  * The status key over the map, extending the Figma design system's three-status
- * legend (Map Pin / Legend 386:17): Normal · Advisory · Warning · Offline.
- * Colours bind to semantic tokens, so the key stays in sync across light/dark.
+ * legend (Map Pin / Legend 386:17): Normal · Watch · Advisory · Warning ·
+ * Offline. Colours bind to semantic tokens, so the key stays in sync across
+ * light/dark.
  *
- * Active alerts still colour individual pins by finer severity
- * (yellow/orange/red) via `pinKindFor`; the legend groups those — the yellow
- * tier reads as "Advisory", orange and red as "Warning". See `LEGEND_COLOR`.
+ * Active alerts colour individual pins by severity (yellow/orange/red) via
+ * `pinKindFor`, and each of those hues now has its own key — "Watch" for the
+ * yellow tier, "Advisory" for orange, "Warning" for red. See `LEGEND_COLOR`.
  */
 export function MapPinLegend({ className }: MapPinLegendProps) {
   const t = useT();
   const items: ReadonlyArray<{ kind: LegendKey; label: string }> = [
     { kind: "normal", label: t.legendNormal },
+    { kind: "watch", label: t.legendWatch },
     { kind: "advisory", label: t.legendAdvisory },
     { kind: "warning", label: t.legendWarning },
     { kind: "offline", label: t.legendOffline },

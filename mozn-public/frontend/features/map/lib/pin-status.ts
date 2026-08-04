@@ -41,22 +41,31 @@ export const SEVERITY_COLOR: Readonly<Record<ApiSeverity, string>> = {
 export const PIN_HALO_OPACITY = 0.2;
 
 /** The keys shown on the map legend, in the order they read (escalating). */
-export type LegendKey = "normal" | "advisory" | "warning" | "offline";
+export type LegendKey =
+  | "normal"
+  | "watch"
+  | "advisory"
+  | "warning"
+  | "offline";
 
 /**
- * Legend swatches. Deliberately NOT a 1:1 colour match with pins — the legend
- * is a coarse grouping key, so the six pin kinds collapse into four entries:
+ * Legend swatches. Still a grouping key rather than a per-pin lookup — the six
+ * pin kinds collapse into five entries — but every hue a pin can actually paint
+ * now has a swatch:
  *
  *   normal   → normal pins
- *   advisory → yellow-tier alert pins
- *   warning  → orange- and red-tier alert pins
+ *   watch    → yellow-tier alert pins
+ *   advisory → orange-tier alert pins
+ *   warning  → red-tier alert pins, plus stations flagged `warning`
  *   offline  → offline and maintenance pins
  *
- * Advisory borrows the orange severity hue rather than `--color-status-advisory-500`
- * so the key reads green → orange → red → grey as a single escalation ramp.
+ * The yellow tier used to hide under "advisory" (swatched orange), which left
+ * yellow pins unexplained. Splitting it out reads green → yellow → orange →
+ * red → grey as a single escalation ramp.
  */
 export const LEGEND_COLOR: Readonly<Record<LegendKey, string>> = {
   normal: "var(--color-status-normal-500)",
+  watch: "var(--color-severity-yellow-500)",
   advisory: "var(--color-severity-orange-500)",
   warning: "var(--color-status-warning-500)",
   offline: "var(--color-status-offline-400)",

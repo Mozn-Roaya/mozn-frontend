@@ -6,8 +6,7 @@ import * as React from "react";
 
 import { listNearestStations } from "@/components/api/stations";
 import { cn } from "@/components/lib/cn";
-import { stationName } from "@/components/lib/i18n";
-import { useLang, useT } from "@/components/state/lang-context";
+import { useLang } from "@/components/state/lang-context";
 import { useStations } from "@/components/state/stations-context";
 
 import { MapControls } from "./map-controls";
@@ -52,7 +51,6 @@ export function MapCanvas({ className }: MapCanvasProps) {
   const pathname = usePathname();
   const router = useRouter();
   const stations = useStations();
-  const t = useT();
   const lang = useLang();
 
   const selectedStationId = selectedIdFromPath(pathname);
@@ -80,9 +78,6 @@ export function MapCanvas({ className }: MapCanvasProps) {
   }, []);
   const handleZoomOut = React.useCallback(() => {
     mapRef.current?.zoomOut();
-  }, []);
-  const handleRecenter = React.useCallback(() => {
-    mapRef.current?.recenter();
   }, []);
   const handleToggleLabels = React.useCallback(() => {
     setShowLabels((v) => !v);
@@ -126,10 +121,6 @@ export function MapCanvas({ className }: MapCanvasProps) {
     );
   }, []);
 
-  const recenterLabel = selectedStation
-    ? t.recenterOn(stationName(selectedStation, lang))
-    : t.resetView;
-
   return (
     <div
       className={cn(
@@ -149,12 +140,10 @@ export function MapCanvas({ className }: MapCanvasProps) {
 
       <MapControls
         showLabels={showLabels}
-        recenterLabel={recenterLabel}
         hideOnMobile={Boolean(selectedStation)}
         isLocating={isLocating}
         onZoomIn={handleZoomIn}
         onZoomOut={handleZoomOut}
-        onRecenter={handleRecenter}
         onToggleLabels={handleToggleLabels}
         onLocate={handleLocate}
       />

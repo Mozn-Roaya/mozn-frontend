@@ -3,6 +3,8 @@ import * as React from "react";
 import { cn } from "@/components/lib/cn";
 import { getDict, type Lang } from "@/components/lib/i18n";
 
+import { ValueBadge } from "./value-badge";
+
 type TemperatureCardProps = {
   current?: number | null;
   feelsLike?: number | null;
@@ -11,6 +13,12 @@ type TemperatureCardProps = {
   scaleMin?: number;
   scaleMax?: number;
   unit?: string;
+  /**
+   * Optional qualifier pill beside the title — used to mark the value as an
+   * estimate on offline stations, so the card can't be mistaken for a real
+   * reading on its own. Omitted everywhere else.
+   */
+  badge?: string;
   className?: string;
   lang?: Lang;
 };
@@ -58,6 +66,7 @@ export function TemperatureCard({
   scaleMin = 0,
   scaleMax = 50,
   unit = "°C",
+  badge,
   className,
   lang = "en",
 }: TemperatureCardProps) {
@@ -99,6 +108,7 @@ export function TemperatureCard({
             <span className="text-body-xs font-medium whitespace-nowrap text-(--color-text-secondary)">
               {t.temperature}
             </span>
+            {badge && <ValueBadge label={badge} />}
           </div>
           {/*
             Figma node 446:37 aligns `°C` to the cap-height of the big number.

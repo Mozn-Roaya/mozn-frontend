@@ -1,10 +1,16 @@
 import { notFound } from "next/navigation";
 
 import { stationName } from "@/components/lib/i18n";
-import { StationOverview, StationOffline, ForecastList } from "@/features/station";
+import {
+  StationOverview,
+  StationOffline,
+  StationEstimated,
+  ForecastList,
+} from "@/features/station";
 
 import { listAlerts } from "../../../../components/api/alerts";
 import { getDailyForecast } from "../../../../components/api/forecasts";
+import { getEstimatedConditions } from "../../../../components/api/open-meteo";
 import { getLatestReading } from "../../../../components/api/readings";
 import { getStation } from "../../../../components/api/stations";
 import { getServerLang } from "../../../../components/lib/lang-server";
@@ -36,10 +42,26 @@ export default async function StationOverviewPage({
 
   if (station.status === "offline") {
     // Forecast is model-generated (separate endpoint), so show it even when offline.
-    const forecast = await getDailyForecast(decodedId, 3).catch(() => []);
+    // The estimate is the same idea applied to current conditions: weather for
+    // the station's coordinates from an outside model, so the panel isn't a dead
+    // end. It returns null (never throws) when unavailable — that's the signal
+    // to fall back to the plain "unavailable" card rather than show blanks.
+    const [forecast, estimate] = await Promise.all([
+      getDailyForecast(decodedId, 3).catch(() => []),
+      getEstimatedConditions(station.latitude, station.longitude),
+    ]);
     return (
       <div className="flex flex-col gap-[24px] w-full">
-        <StationOffline station={station} lang={lang} />
+        {estimate ? (
+          <StationEstimated
+            station={station}
+            estimate={estimate}
+            forecast={forecast}
+            lang={lang}
+          />
+        ) : (
+          <StationOffline station={station} lang={lang} />
+        )}
         <ForecastList
           subtitle={stationName(station, lang)}
           days={forecast}
